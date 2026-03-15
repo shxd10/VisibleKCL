@@ -1,0 +1,23 @@
+[package]
+name = "VisibleMKW"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.102"
+brres = "0.1.7"
+clap = { version = "4.5.60", features = ["derive"] }
+image = "0.25.9"
+szs = "0.3.7"
+
+[patch.crates-io]
+szs = { path = "szs-patched" }
+brres-sys = { path = "brres-sys-patched" }
+brres = { path = "brres-patched" }
+
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
+
+[[bin]]
+name = "vmkw"
+path = "src/main.rs"

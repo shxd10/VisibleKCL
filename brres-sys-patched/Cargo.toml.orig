@@ -1,0 +1,30 @@
+[package]
+name = "brres-sys"
+license = "MIT"
+version = "0.1.12"
+edition = "2021"
+description = "Low-level bindings for librii's .brres layer"
+homepage = "https://github.com/riidefi/RiiStudio/tree/master/source/brres"
+repository = "https://github.com/riidefi/RiiStudio"
+keywords = ["gamedev", "graphics", "wii"]
+readme = "README.md"
+# Don't include unit tests in crate
+exclude=["/tests"]
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+crate-type=["cdylib", "lib", "staticlib"]
+
+[features]
+default = ["c_api"]
+c_api = []
+
+[build-dependencies]
+bindgen = { version = "0.66", optional = true }
+cc = { version = "1.0.83", features = ["parallel"] }
+glob = "0.3.1"
+
+[dependencies]
+gctex = { version = "0.3.12", features = [] }
+wiitrig = "0.0.4"
+anyhow = "1.0.86"

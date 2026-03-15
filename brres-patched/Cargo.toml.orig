@@ -1,0 +1,29 @@
+[package]
+name = "brres"
+license = "MIT"
+version = "0.1.7"
+edition = "2021"
+description = "brres is a Rust crate designed for reading and writing .brres 3d model archives used in the Nintendo Wii games. The library provides C bindings, making it useful in both Rust and C/C++ based projects."
+homepage = "https://github.com/riidefi/RiiStudio/tree/master/source/brres"
+repository = "https://github.com/riidefi/RiiStudio"
+keywords = ["gamedev", "graphics", "wii"]
+readme = "README.md"
+# Don't include unit tests in crate
+exclude=["/tests"]
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[features]
+# Enabled only for development
+default = ["c_api"]
+c_api = []
+
+[lib]
+crate-type=["cdylib", "lib", "staticlib"]
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = "1.0.86"
+bytemuck = "1.16.0"
+brres-sys = { path = "./lib/brres-sys", version = "0.1.12" }
+gctex = "0.3.7"

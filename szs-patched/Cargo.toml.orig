@@ -1,0 +1,40 @@
+[package]
+name = "szs"
+license = "MIT"
+version = "0.3.7"
+edition = "2021"
+description = "Lightweight crate for SZS (\"Yaz0\") compression/decompression used in the Nintendo GameCube/Wii games. The library provides C, C++ and C# bindings. YAY0 (\"SZP\") is supported, too."
+homepage = "https://github.com/riidefi/RiiStudio/tree/master/source/szs"
+repository = "https://github.com/riidefi/RiiStudio"
+keywords = ["wii", "gamecube", "yaz0", "szs", "yay0"]
+readme = "README.md"
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[features]
+default = ["c_api"]
+c_api = []
+# Internal, don't enable
+run_bindgen = ["bindgen"]
+
+[lib]
+crate-type=["cdylib", "lib", "staticlib"]
+
+[build-dependencies]
+bindgen = { version = "0.57", optional = true }
+cc = { version = "1.0", features = ["parallel"] }
+
+[dev-dependencies]
+sha2 = "0.10.8"
+criterion = "0.5.1"
+
+[[bench]]
+name = "deinterlace_bench"
+harness = false
+
+[[bench]]
+name = "mkw_bench"
+harness = false
+
+[dependencies]
+libc = "0.2.155"
+memchr = "2.7.4"
