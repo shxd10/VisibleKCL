@@ -176,6 +176,7 @@ fn build_vertex_data(faces: &[[usize; 3]]) -> Vec<u8> {
             let local_idx = (face_idx * 3 + i) as u16;
             let mut indices = [0u16; 26];
             indices[9]  = local_idx; // GX_VA_POS
+            indices[10]  = local_idx; // GX_VA_NRM
             indices[11] = local_idx; // GX_VA_CLR0
             for idx in indices {
                 data.extend_from_slice(&idx.to_le_bytes());
@@ -185,6 +186,7 @@ fn build_vertex_data(faces: &[[usize; 3]]) -> Vec<u8> {
     data
 }
 
+// cross product of 2 edges, normalized
 fn calculate_normal(v0: [f32; 3], v1: [f32; 3], v2: [f32; 3]) -> [f32; 3] {
     let e1 = [v1[0]-v0[0], v1[1]-v0[1], v1[2]-v0[2]];
     let e2 = [v2[0]-v0[0], v2[1]-v0[1], v2[2]-v0[2]];
@@ -211,7 +213,7 @@ pub fn from_obj(brres: &mut Archive, obj: &str, mtl: &str) -> Result<(), String>
     brres.textures.push(dummy_tex("DummyTex"));
 
     let mut position_buffer: Vec<VertexPositionBuffer> = Vec::new();
-    let mut normal_buffer: Vec<VertexPositionBuffer> = Vec::new();
+    let mut normal_buffer: Vec<VertexNormalBuffer> = Vec::new();
     let mut material_buffer: Vec<JSONMaterial> = Vec::new();
     let mut color_buffer: Vec<VertexColorBuffer> = Vec::new();
     let mut mesh_buffer: Vec<Mesh> = Vec::new();
@@ -224,6 +226,7 @@ pub fn from_obj(brres: &mut Archive, obj: &str, mtl: &str) -> Result<(), String>
         // POSITION
 
         let pos_name = format!("{mat_name}_pos");
+        let nrm_name = format!("{mat_name}_nrm");
         let material_name = format!("{mat_name}_mat");
         let clr_name = format!("{mat_name}_clr");
         let mesh_name = format!("{mat_name}_mesh");
@@ -239,8 +242,8 @@ pub fn from_obj(brres: &mut Archive, obj: &str, mtl: &str) -> Result<(), String>
         position_buffer.push(VertexPositionBuffer {
             id: i as i32,
             name: pos_name.clone(),
-            q_comp: 1,
-            q_type: 4,
+            q_comp: 1, // xyz
+            q_type: 4, // float
             q_divisor: 0,
             q_stride: 12,
             data: verts,
@@ -248,7 +251,29 @@ pub fn from_obj(brres: &mut Archive, obj: &str, mtl: &str) -> Result<(), String>
         });
 
         // NORMALS
-        todo!();
+
+        let mut normals: Vec<[f32; 3]> = Vec::new();
+        for face in faces {
+            let v0 = obj_file.vertices[face[0]];
+            let v1 = obj_file.vertices[face[1]];
+            let v2 = obj_file.vertices[face[2]];
+            let normal = calculate_normal(v0, v1, v2);
+            normals.push(normal);
+            normals.push(normal);
+            normals.push(normal);
+        }
+
+        // https://wiki.tockdom.com/wiki/MDL0_(File_Format)#Section_3_-_Normals
+        normal_buffer.push(VertexNormalBuffer {
+            id: i as i32,
+            name: nrm_name.clone(),
+            q_comp: 0, // "normal" normal (XYZ of a normal)
+            q_type: 4, // float again ofc
+            q_divisor: 0,
+            q_stride: 12,
+            data: normals,
+            cached_minmax: None,
+        });
 
         // COLORS
 
@@ -287,7 +312,11 @@ pub fn from_obj(brres: &mut Archive, obj: &str, mtl: &str) -> Result<(), String>
         tev_stage.colorStage.c = TevColorArg::zero;
         tev_stage.colorStage.d = TevColorArg::zero;
         tev_stage.colorStage.scale = TevScale::scale_1;
-        tev_stage.alphaStage.b = TevAlphaArg::rasa;
+
+        tev_stage.alphaStage.a = TevAlphaArg::rasa;
+        tev_stage.alphaStage.b = TevAlphaArg::zero;
+        tev_stage.alphaStage.c = TevAlphaArg::zero;
+        tev_stage.alphaStage.d = TevAlphaArg::zero;
 
         // opaue - alpha settings
         let (alpha_compare, z_mode, blend_mode, xlu, early_z) = if is_alpha {
@@ -305,7 +334,7 @@ pub fn from_obj(brres: &mut Archive, obj: &str, mtl: &str) -> Result<(), String>
             chanData: vec![
                 // color chan
                 JSONChannelData {
-                    matColor: Color { r: 128, g: 128, b: 128, a: 255 },
+                    matColor: Color { r: 255, g: 255, b: 255, a: 255 },
                     ambColor: Color { r: 255, g: 255, b: 255, a: 255 },
                 },
                 // alpha chan
@@ -318,6 +347,7 @@ pub fn from_obj(brres: &mut Archive, obj: &str, mtl: &str) -> Result<(), String>
                 JSONChannelControl {
                     enabled: true,
                     Ambient: ColorSource::Register,
+                    // i use vertex colors
                     Material: ColorSource::Vertex,
                     lightMask: LightID::None,
                     diffuseFn: DiffuseFunction::Clamp,
@@ -353,7 +383,7 @@ pub fn from_obj(brres: &mut Archive, obj: &str, mtl: &str) -> Result<(), String>
             visible: true,
             pos_buffer: pos_name,
             clr_buffer: vec![clr_name, String::new()],
-            nrm_buffer: String::new(),
+            nrm_buffer: nrm_name,
             uv_buffer: vec![
                 String::new(),
                 String::new(),
@@ -364,8 +394,8 @@ pub fn from_obj(brres: &mut Archive, obj: &str, mtl: &str) -> Result<(), String>
                 String::new(),
                 String::new(),
             ],
-            // position and color0 https://github.com/devkitPro/libogc/blob/master/gc/ogc/gx.h
-            vcd: (1 << 9) | (1 << 11),
+            // position, normals and color0 https://github.com/devkitPro/libogc/blob/master/gc/ogc/gx.h
+            vcd: (1 << 9) | (1 << 10) | (1 << 11),
             current_matrix: 0,
             mprims: vec![MatrixPrimitive {
                 matrices: vec![],
@@ -379,8 +409,9 @@ pub fn from_obj(brres: &mut Archive, obj: &str, mtl: &str) -> Result<(), String>
     brres.models[0].meshes = mesh_buffer;
     brres.models[0].positions = position_buffer;
     brres.models[0].colors = color_buffer;
-    brres.models[0].normals = vec![];
+    brres.models[0].normals = normal_buffer;
     brres.models[0].texcoords = vec![];
+    // for each group, update the draw polygon call (needed for the bone to reference new data) with the new data
     brres.models[0].bones[0].draw_calls = (0..obj_file.groups.len()).map(|i| JSONDrawCall {
         material: i as u32,
         poly: i as u32,

@@ -33,6 +33,35 @@ pub struct ParsedArc {
     data: Vec<u8>,
 }
 
+impl ParsedArc {
+    pub fn replace_file(&mut self, name: &str, new_data: Vec<u8>) -> Result<(), String> {
+        // find the node
+        let node = self.nodes.iter_mut()
+            .find(|n| n.name == name)
+            .ok_or(format!("File not found: {}", name))?;
+        
+        let old_size = node.data_size as usize;
+        let new_size = new_data.len();
+        let offset = node.data_offset as usize;
+        
+        // replace data in the raw data vec
+        self.data.splice(offset..offset + old_size, new_data);
+        
+        // update sizes of affected nodes
+        let size_diff = new_size as i64 - old_size as i64;
+        node.data_size = new_size as u32;
+        
+        // update offsets of all nodes that come after this one
+        for n in self.nodes.iter_mut() {
+            if n.node_type == 0 && n.data_offset as usize > offset {
+                n.data_offset = (n.data_offset as i64 + size_diff) as u32;
+            }
+        }
+        
+        Ok(())
+    }
+}
+
 impl Header {
     fn parse(data: &[u8]) -> Result<Self, String> {
         let magic = read_u32(data, 0x00)?;
@@ -69,6 +98,10 @@ fn decode_yaz0(data: &[u8]) -> Result<Vec<u8>, String> {
     szs::decode(data).map_err(|e| format!("Failed to decode: {}", e))
 }
 
+fn encode_yaz0(data: &[u8]) -> Result<Vec<u8>, String> {
+    szs::encode(data, szs::EncodeAlgo::LibYaz0).map_err(|e| format!("Failed to encode: {}", e))
+}
+
 fn parse_arc(data: &[u8]) -> Result<ParsedArc, String> {
     let header = Header::parse(data)?;
 
@@ -95,6 +128,61 @@ fn parse_arc(data: &[u8]) -> Result<ParsedArc, String> {
         parsed_nodes.push(parsed_node);
     }
     Ok(ParsedArc { header, nodes: parsed_nodes, data: data.to_vec() })
+}
+
+fn write_arc(arc: &ParsedArc) -> Vec<u8> {
+    // build string pool
+    let mut string_pool: Vec<u8> = Vec::new();
+    let mut string_offsets: Vec<u32> = Vec::new();
+    for node in &arc.nodes {
+        string_offsets.push(string_pool.len() as u32);
+        string_pool.extend_from_slice(node.name.as_bytes());
+        string_pool.push(0); // null terminator
+    }
+
+    let node_count = arc.nodes.len();
+    let nodes_size = node_count * 0x0C;
+    let first_node_offset = 0x20usize;
+    let string_pool_offset = first_node_offset + nodes_size;
+    // data starts aligned to 0x20
+    let data_offset = (string_pool_offset + string_pool.len() + 0x1F) & !0x1F;
+
+    let mut out: Vec<u8> = Vec::new();
+
+    // header
+    out.extend_from_slice(&0x55AA382Du32.to_be_bytes()); // magic
+    out.extend_from_slice(&(first_node_offset as u32).to_be_bytes());
+    out.extend_from_slice(&(nodes_size as u32).to_be_bytes());
+    out.extend_from_slice(&(data_offset as u32).to_be_bytes());
+    out.extend_from_slice(&[0u8; 16]); // reserved
+
+    // nodes
+    for (i, node) in arc.nodes.iter().enumerate() {
+        let string_offset = string_offsets[i];
+        out.push(node.node_type);
+        // u24 string offset big endian
+        out.push(((string_offset >> 16) & 0xFF) as u8);
+        out.push(((string_offset >> 8) & 0xFF) as u8);
+        out.push((string_offset & 0xFF) as u8);
+        out.extend_from_slice(&node.data_offset.to_be_bytes());
+        out.extend_from_slice(&node.data_size.to_be_bytes());
+    }
+
+    // string pool
+    out.extend_from_slice(&string_pool);
+
+    // pad to data offset
+    out.resize(data_offset, 0);
+
+    let file_data = &arc.data[arc.header.data_offset as usize..];
+    out.extend_from_slice(file_data);
+
+    out
+}
+
+pub fn write_arc_to_szs(arc: &ParsedArc) -> Result<Vec<u8>, String> {
+    let arc_data = write_arc(arc);
+    encode_yaz0(&arc_data)
 }
 
 pub fn parse(data: &[u8]) -> Result<ParsedArc, String> {
@@ -152,6 +240,7 @@ pub fn extract(path: &str) -> Result<String, String> {
 }
 
 pub struct CourseFiles {
+    pub arc: ParsedArc,
     pub kmp: kmp::ParsedKmp,
     pub kcl: kcl::ParsedKcl,
     pub brres: brres::Archive,
@@ -176,6 +265,7 @@ pub fn parse_course_files(path: &str) -> Result<CourseFiles, String> {
         .ok_or("course_model.brres not found")?;
 
     Ok(CourseFiles {
+        arc: parsed,
         kmp: kmp::parse(&kmp)?,
         kcl: kcl::parse(&kcl)?,
         brres: super::brres::parse(&brres).map_err(|e| e.to_string())?,

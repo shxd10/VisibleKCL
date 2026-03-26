@@ -1,8 +1,8 @@
-use crate::{KclOptions, KmpOptions};
+use crate::{KclDrawOptions, KmpDrawOptions};
 use image::{Rgb, RgbImage};
 
 use super::binary::*;
-use super::kcl::{Flags, ParsedKcl};
+use super::kcl::*;
 use super::kmp::*;
 use super::szs::{CourseFiles, parse_course_files};
 
@@ -127,7 +127,7 @@ struct CircleDraw {
 
 impl Default for CircleDraw {
     fn default() -> Self {
-        let thickness = KmpOptions::default().thickness as i32;
+        let thickness = KmpDrawOptions::default().thickness as i32;
         CircleDraw {
             r: thickness,
             outline_color: Rgb([0, 0, 0]),
@@ -175,58 +175,18 @@ fn shade_color(color: Rgb<u8>, brightness: f32) -> Rgb<u8> {
     ])
 }
 
-// lorenzi's kmp editor colors
-fn flag_colors(flag: &Flags) -> Rgb<u8> {
-    let (r, g, b) = match flag {
-        Flags::Road => (255, 255, 255),
-        Flags::SlipperyRoad1 => (255, 230, 204),
-        Flags::WeakOffroad => (0, 204, 0),
-        Flags::Offroad => (0, 153, 0),
-        Flags::HeavyOffroad => (0, 102, 0),
-        Flags::SlipperyRoad2 => (204, 230, 255),
-        Flags::BoostPanel => (255, 128, 0),
-        Flags::BoostRamp => (255, 153, 0),
-        Flags::JumpPad => (255, 204, 0),
-        Flags::ItemRoad => (230, 230, 255),
-        Flags::SolidFall => (179, 26, 26),
-        Flags::MovingWater => (0, 128, 255),
-        Flags::Wall => (153, 153, 153),
-        Flags::InvisibleWall => (0, 0, 153),
-        Flags::ItemWall => (153, 153, 179),
-        Flags::Wall2 => (153, 153, 153),
-        Flags::FallBoundary => (204, 0, 0),
-        Flags::CannonTrigger => (255, 0, 128),
-        Flags::ForceRecalculation => (128, 0, 255),
-        Flags::HalfPipeRamp => (0, 77, 255),
-        Flags::PlayerOnlyWall => (204, 102, 0),
-        Flags::MovingRoad => (230, 230, 255),
-        Flags::StickyRoad => (230, 179, 255),
-        Flags::Road2 => (255, 255, 255),
-        Flags::SoundTrigger => (255, 0, 255),
-        Flags::WeakWall => (102, 153, 102),
-        Flags::EffectTrigger => (204, 0, 255),
-        Flags::ItemStateModifier => (255, 0, 255),
-        Flags::HalfPipeInvisibleWall => (0, 153, 0),
-        Flags::RotatingRoad => (230, 230, 255),
-        Flags::SpecialWall => (204, 179, 204),
-        Flags::InvisibleWall2 => (0, 0, 153),
-    };
-    Rgb([r, g, b])
-}
-
-fn draw_kcl(img: &mut RgbImage, parsed: &ParsedKcl, to_pixel: &dyn Fn(f32, f32) -> (i32, i32), options: &KclOptions) {
-    // setting draw priority
-    let priority = |flag: &Flags| -> u8 {
-        match flag {
-            // fall boundaries and stuff always behind
-            Flags::FallBoundary | Flags::SolidFall => 0,
-            Flags::Wall | Flags::Wall2 | Flags::InvisibleWall | Flags::InvisibleWall2 => 1,
+fn draw_kcl(img: &mut RgbImage, parsed: &ParsedKcl, to_pixel: &dyn Fn(f32, f32) -> (i32, i32), options: &KclDrawOptions) {
+    // define draw priority for the more important and less important flags (on top and under)
+    let priority = |flag: &Flag| -> u8 {
+        match flag.base_type {
+            BaseType::FallBoundary | BaseType::SolidFall => 0,
+            BaseType::Wall | BaseType::Wall2 | BaseType::InvisibleWall | BaseType::InvisibleWall2 => 1,
             _ => 2,
         }
     };
 
     let mut prisms: Vec<_> = parsed.sections.prisms.iter().collect();
-    prisms.sort_by_key(|p| priority(&p.flags));
+    prisms.sort_by_key(|p| priority(&p.flag));
 
     let positions = &parsed.sections.position_vectors;
     for prism in prisms {
@@ -244,7 +204,8 @@ fn draw_kcl(img: &mut RgbImage, parsed: &ParsedKcl, to_pixel: &dyn Fn(f32, f32) 
             continue;
         }
 
-        let color = flag_colors(&prism.flags);
+        let [r, g, b, _] = prism.flag.base_type.color();
+        let color = Rgb([r, g, b]);
         let (ax, az) = to_pixel(v1[0], v1[2]);
         let (bx, bz) = to_pixel(v2[0], v2[2]);
         let (cx, cz) = to_pixel(v3[0], v3[2]);
@@ -254,8 +215,6 @@ fn draw_kcl(img: &mut RgbImage, parsed: &ParsedKcl, to_pixel: &dyn Fn(f32, f32) 
             draw_simple_line(img, bx, bz, cx, cz, color);
             draw_simple_line(img, cx, cz, ax, az, color);
         } else {
-            // take face normal Y, determine it's brightness based on facing angle
-            // most natural and simple way to create depthness on 2d images afaik
             let shading = options.shading;
             let brightness = shading + (fnrm[1].abs()) * shading;
             let shaded_color = shade_color(color, brightness);
@@ -550,7 +509,7 @@ fn draw_mspt(img: &mut RgbImage, mspt: &Section<MSPT>, to_pixel: &dyn Fn(f32, f3
     }
 }
 
-fn draw_kmp(img: &mut RgbImage, parsed: &ParsedKmp, to_pixel: &dyn Fn(f32, f32) -> (i32, i32), options: &KmpOptions) {
+fn draw_kmp(img: &mut RgbImage, parsed: &ParsedKmp, to_pixel: &dyn Fn(f32, f32) -> (i32, i32), options: &KmpDrawOptions) {
     let ckpt = &parsed.ckpt;
     let thickness = options.thickness;
 
@@ -568,7 +527,7 @@ fn draw_kmp(img: &mut RgbImage, parsed: &ParsedKmp, to_pixel: &dyn Fn(f32, f32) 
     if options.ckpt { draw_ckpt(img, ckpt, &parsed.ckph, to_pixel, thickness, options.ckpt_side_lines); }
 }
 
-pub fn to_image(szs_path: &str, kcl_options: &KclOptions, kmp_options: &KmpOptions) -> RgbImage {
+pub fn to_image(szs_path: &str, kcl_options: &KclDrawOptions, kmp_options: &KmpDrawOptions) -> RgbImage {
     let parsed = parse_course_files(szs_path).expect("failed to parse kmp/kcl");
     let kcl = &parsed.kcl;
     let kmp = &parsed.kmp;
@@ -576,7 +535,7 @@ pub fn to_image(szs_path: &str, kcl_options: &KclOptions, kmp_options: &KmpOptio
     // bbox
     let used_positions: Vec<[f32; 3]> = kcl.sections.prisms.iter()
         // ignore fall boundaries on bounding box for those tracks with extended fall boundaries
-        .filter(|p| !matches!(p.flags, Flags::FallBoundary | Flags::SolidFall))
+        .filter(|p| !matches!(p.flag.base_type, BaseType::FallBoundary | BaseType::SolidFall))
         .map(|p| kcl.sections.position_vectors[p.pos_i as usize])
         .filter(|p| p[0].is_finite() && p[2].is_finite())
         .collect();

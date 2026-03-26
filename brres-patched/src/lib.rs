@@ -1014,10 +1014,7 @@ fn create_json(archive: &Archive) -> anyhow::Result<(String, Vec<u8>)> {
     let mut ctx = JsonWriteCtx::new();
     let json_archive = archive.to_json(&mut ctx);
     let json_str = serde_json::to_string_pretty(&json_archive)?;
-    std::fs::write("debug_archive.json", &json_str).unwrap(); // add this
     let blob = buffers::collate_buffers(&ctx.buffers);
-    eprintln!("total blob size: {}", blob.len()); // add this
-    eprintln!("num buffers: {}", ctx.buffers.len()); // add this
 
     Ok((json_str, blob))
 }
