@@ -50,7 +50,12 @@ enum Command {
     Ckpt { 
         path: String, 
         #[arg(long, default_value_t = false)]
-        write_obj: bool
+        write_obj: bool,
+
+        #[arg(long, default_value_t = true)]
+        ckpt: bool,
+        #[arg(long, default_value_t = true)]
+        ckpt_side: bool,
     },
     Draw {
         path: String,
@@ -262,9 +267,33 @@ fn main() -> Result<(), String> {
 
             println!("Took: {:?}", start.elapsed());
         }
-        Command::Ckpt { path, write_obj } => {
+        Command::Ckpt { path, write_obj, ckpt, ckpt_side, } => {
             let start = Instant::now();
-            kmp::parse_from_path(&path)?;
+
+            let kmp_option = KmpOption { 
+                ckpt, 
+                ckpt_side
+            };
+
+            let filename = Path::new(&path).file_stem().unwrap().to_str().unwrap();
+            let mut course = szs::parse_course_files(&path)?;
+            let object = kmp::to_obj(&course.kmp, &course.kcl, filename, &kmp_option);
+
+            let obj = object.obj;
+            let mtl = object.mtl;
+
+            if write_obj {
+                write_obj_file(&obj, &mtl, filename);
+            }
+
+            brres::from_obj_cp(&mut course.brres, &obj, &mtl)?;
+
+            let buf = course.brres.write_memory().map_err(|e| e.to_string())?;
+            course.arc.replace_file("course_model.brres", buf)?;
+
+            let szs_bytes = szs::write_arc_to_szs(&course.arc)?;
+            fs::write(format!("{}.szs", filename), szs_bytes).map_err(|e| e.to_string())?;
+
             println!("Took: {:?}", start.elapsed());
         }
         Command::Draw { 

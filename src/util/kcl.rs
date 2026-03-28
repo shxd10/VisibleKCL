@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 use crate::{HighlightOption, KmpOption, Object, SpecialPlanesOption, util::kmp::{CheckPointType, ParsedKmp}};
 use super::binary::*;
+use super::kmp::add_checkpoint;
 use std::collections::HashMap;
 
 // https://wiki.tockdom.com/wiki/KCL_(File_Format)
@@ -496,108 +497,6 @@ pub fn get_bounding_box(positions: &[[f32; 3]]) -> BoundingBox {
     }
 }
 
-fn add_checkpoint(obj: &mut String, mtl: &mut String, kmp: &ParsedKmp, bbox: BoundingBox, vertex_offset: &mut usize, side: bool) {
-    let ckpt = &kmp.ckpt;
-
-    // hardcode the checkpoint groups in the mtl
-    let alpha = 40;
-    let groups = [
-        (CheckPointType::FinishLine, "ckpt_finish", [255u8, 127, 255, alpha]),
-        (CheckPointType::KeyCheckPoint, "ckpt_key", [255u8, 0, 255, alpha]),
-        (CheckPointType::CheckPoint, "ckpt_normal", [0u8, 0, 255, alpha]),
-    ];
-    if side {
-        let side_color = [0u8, 255, 255, alpha];
-        mtl.push_str("newmtl ckpt_side\n");
-        mtl.push_str(&format!(
-            "Kd {:.4} {:.4} {:.4}\nd {:.4}\n\n",
-            side_color[0] as f32 / 255.0,
-            side_color[1] as f32 / 255.0,
-            side_color[2] as f32 / 255.0,
-            side_color[3] as f32 / 255.0,
-        ));
-
-        // write the side group once before the main loop
-        obj.push_str("g ckpt_side\nusemtl ckpt_side\n");
-    }
-
-    for (cp_type, mat_name, color) in &groups {
-        mtl.push_str(&format!("newmtl {}\n", mat_name));
-        mtl.push_str(&format!(
-            "Kd {:.4} {:.4} {:.4}\nd {:.4}\n\n",
-            color[0] as f32 / 255.0,
-            color[1] as f32 / 255.0,
-            color[2] as f32 / 255.0,
-            color[3] as f32 / 255.0,
-        ));
-
-        obj.push_str(&format!("g {}\n", mat_name));
-        obj.push_str(&format!("usemtl {}\n", mat_name));
-
-        // use peekable for the ckpt sides
-        let mut iter = ckpt.entries.iter().peekable();
-        while let Some(checkpoint) = iter.next() {
-            if checkpoint.checkpoint_type() != *cp_type { continue; }
-            
-            let (x0, z0) = (checkpoint.left_point[0], checkpoint.left_point[1]);
-            let (x1, z1) = (checkpoint.right_point[0], checkpoint.right_point[1]);
-            let y = bbox.y_max + 500.0; // some padding
-            let v0 = [x0, y, z0]; // top left
-            let v1 = [x1, y, z1]; // top right
-            let v2 = [x1, 0.0, z1]; // bottom right
-            let v3 = [x0, 0.0, z0]; // bottom left
-            // vert
-            obj.push_str(&format!("v {} {} {}\n", v0[0], v0[1], v0[2]));
-            obj.push_str(&format!("v {} {} {}\n", v1[0], v1[1], v1[2]));
-            obj.push_str(&format!("v {} {} {}\n", v2[0], v2[1], v2[2]));
-            obj.push_str(&format!("v {} {} {}\n", v3[0], v3[1], v3[2]));
-            // i pull vertex offset to keep count of the previous vertices count (from the actual kcl)
-            let base = *vertex_offset;
-            *vertex_offset += 4;
-            obj.push_str(&format!("f {} {} {}\n", base, base + 1, base + 2));
-            obj.push_str(&format!("f {} {} {}\n", base, base + 2, base + 3));
-
-            if side {
-                // circular looping
-                // last cp has the first as next, avoiding the last not connecting to the firsr
-                let next = iter.peek().copied().unwrap_or(&ckpt.entries[0]);
-
-                let (nx0, nz0) = (next.left_point[0], next.left_point[1]);
-                let (nx1, nz1) = (next.right_point[0], next.right_point[1]);
-
-                // left
-                let lv0 = [x0, y, z0];
-                let lv1 = [nx0, y, nz0];
-                let lv2 = [nx0, 0.0, nz0];
-                let lv3 = [x0, 0.0, z0];
-                obj.push_str(&format!("v {} {} {}\n", lv0[0], lv0[1], lv0[2]));
-                obj.push_str(&format!("v {} {} {}\n", lv1[0], lv1[1], lv1[2]));
-                obj.push_str(&format!("v {} {} {}\n", lv2[0], lv2[1], lv2[2]));
-                obj.push_str(&format!("v {} {} {}\n", lv3[0], lv3[1], lv3[2]));
-                let base = *vertex_offset;
-                *vertex_offset += 4;
-                obj.push_str(&format!("f {} {} {}\n", base, base + 1, base + 2));
-                obj.push_str(&format!("f {} {} {}\n", base, base + 2, base + 3));
-
-                // right
-                let rv0 = [x1, y, z1];
-                let rv1 = [nx1, y, nz1];
-                let rv2 = [nx1, 0.0, nz1];
-                let rv3 = [x1, 0.0, z1];
-                obj.push_str(&format!("v {} {} {}\n", rv0[0], rv0[1], rv0[2]));
-                obj.push_str(&format!("v {} {} {}\n", rv1[0], rv1[1], rv1[2]));
-                obj.push_str(&format!("v {} {} {}\n", rv2[0], rv2[1], rv2[2]));
-                obj.push_str(&format!("v {} {} {}\n", rv3[0], rv3[1], rv3[2]));
-                let base = *vertex_offset;
-                *vertex_offset += 4;
-                obj.push_str(&format!("f {} {} {}\n", base, base + 1, base + 2));
-                obj.push_str(&format!("f {} {} {}\n", base, base + 2, base + 3));
-            }
-        }
-        obj.push('\n');
-    }
-}
-
 fn add_kmp(obj: &mut String, mtl: &mut String, kmp: &ParsedKmp, kmp_option: &KmpOption, bbox: BoundingBox, vertex_offset: &mut usize) {
     if kmp_option.ckpt {
         add_checkpoint(obj, mtl, kmp, bbox, vertex_offset, kmp_option.ckpt_side);
@@ -665,7 +564,7 @@ pub fn to_obj(
     let mut obj = String::new();
     let mut mtl = String::new();
 
-    obj.push_str("# Generated by VisibleMKW\n");
+    obj.push_str("# Generated by VisibleKCL\n");
     obj.push_str(&format!("mtllib {name}.mtl\n\n"));
 
     let pos_buf = &parsed.sections.position_vectors;

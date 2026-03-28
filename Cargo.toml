@@ -1,5 +1,5 @@
 [package]
-name = "VisibleMKW"
+name = "VisibleKCL"
 version = "0.1.0"
 edition = "2024"
 
@@ -16,5 +16,5 @@ brres-sys = { path = "brres-sys-patched" }
 brres = { path = "brres-patched" }
 
 [[bin]]
-name = "vmkw"
+name = "vkcl"
 path = "src/main.rs"

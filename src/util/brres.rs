@@ -2,32 +2,6 @@ use brres::{json::*, enums::*};
 use brres::*;
 use super::binary::*;
 
-fn encode_rgba8_2x2(r: u8, g: u8, b: u8, a: u8) -> Vec<u8> {
-    let mut data = vec![0u8; 64];
-    for i in 0..16 {
-        data[i * 2]     = a;
-        data[i * 2 + 1] = r;
-    }
-    for i in 0..16 {
-        data[32 + i * 2]     = g;
-        data[32 + i * 2 + 1] = b;
-    }
-    data
-}
-
-fn dummy_tex(name: &str) -> Texture {
-    Texture {
-        name: name.to_string(),
-        width: 2,
-        height: 2,
-        format: 6, // RGBA8
-        number_of_images: 1,
-        data: encode_rgba8_2x2(255, 255, 255, 255),
-        min_lod: 0.0,
-        max_lod: 0.0,
-    }
-}
-
 struct ObjData {
     vertices: Vec<[f32; 3]>,
     groups: Vec<(String, Vec<[usize; 3]>)>,
@@ -209,8 +183,6 @@ pub fn from_obj(brres: &mut Archive, obj: &str, mtl: &str) -> Result<(), String>
     let model_normals = model.normals.clone();
     let model_texcoords = model.texcoords.clone();
     let model_matrices = model.matrices.clone();
-
-    brres.textures.push(dummy_tex("DummyTex"));
 
     let mut position_buffer: Vec<VertexPositionBuffer> = Vec::new();
     let mut normal_buffer: Vec<VertexNormalBuffer> = Vec::new();
@@ -430,6 +402,226 @@ pub fn from_obj(brres: &mut Archive, obj: &str, mtl: &str) -> Result<(), String>
         poly: i as u32,
         prio: 0,
     }).collect();
+
+    Ok(())
+}
+
+pub fn from_obj_cp(brres: &mut Archive, obj: &str, mtl: &str) -> Result<(), String> {
+    let obj_file = parse_obj(obj)?;
+    let mtl_file = parse_mtl(mtl)?;
+
+    let model = &brres.models[0];
+    let model_name = model.name.clone();
+    let model_info = model.info.clone();
+    let model_texcoords = model.texcoords.clone();
+    let model_matrices = model.matrices.clone();
+    let mut position_buffer: Vec<VertexPositionBuffer> = model.positions.clone();
+    let mut normal_buffer: Vec<VertexNormalBuffer> = model.normals.clone();
+    let mut material_buffer: Vec<JSONMaterial> = model.materials.clone();
+    let mut color_buffer: Vec<VertexColorBuffer> = model.colors.clone();
+    let mut mesh_buffer: Vec<Mesh> = model.meshes.clone();
+
+    let mut draw_calls = brres.models[0].bones[0].draw_calls.clone();
+    let first_mat_len  = material_buffer.len();
+    let first_mesh_len = mesh_buffer.len();
+    let first_pos_len  = position_buffer.len();
+    let first_nrm_len  = normal_buffer.len();
+    let first_clr_len  = color_buffer.len();
+
+    for (i, (mat_name, faces)) in obj_file.groups.iter().enumerate() {
+        // get mtl data from the file
+        let mtl_data = mtl_file.materials.iter().find(|m| &m.name == mat_name);
+
+        // POSITIONS
+        let pos_name = format!("{mat_name}_pos");
+        let nrm_name = format!("{mat_name}_nrm");
+        let material_name = format!("{mat_name}_mat");
+        let clr_name = format!("{mat_name}_clr");
+        let mesh_name = format!("{mat_name}_mesh");
+
+        let mut verts: Vec<[f32; 3]> = Vec::new();
+        for face in faces {
+            verts.push(obj_file.vertices[face[0]]);
+            verts.push(obj_file.vertices[face[1]]);
+            verts.push(obj_file.vertices[face[2]]);
+        }
+
+        // https://wiki.tockdom.com/wiki/MDL0_(File_Format)#Section_2_-_Vertices
+        position_buffer.push(VertexPositionBuffer {
+            id: (first_pos_len + i) as i32,
+            name: pos_name.clone(),
+            q_comp: 1, // xyz
+            q_type: 4, // float
+            q_divisor: 0,
+            q_stride: 12,
+            data: verts,
+            cached_minmax: None,
+        });
+
+        // NORMALS
+
+        let mut normals: Vec<[f32; 3]> = Vec::new();
+        for face in faces {
+            let v0 = obj_file.vertices[face[0]];
+            let v1 = obj_file.vertices[face[1]];
+            let v2 = obj_file.vertices[face[2]];
+            let normal = calculate_normal(v0, v1, v2);
+            normals.push(normal);
+            normals.push(normal);
+            normals.push(normal);
+        }
+
+        // https://wiki.tockdom.com/wiki/MDL0_(File_Format)#Section_3_-_Normals
+        normal_buffer.push(VertexNormalBuffer {
+            id: (first_nrm_len + i) as i32,
+            name: nrm_name.clone(),
+            q_comp: 0, // "normal" normal (XYZ of a normal)
+            q_type: 4, // float again ofc
+            q_divisor: 0,
+            q_stride: 12,
+            data: normals,
+            cached_minmax: None,
+        });
+
+        // COLORS
+
+        // get kd + d from mtl, then multiply for binary format
+        let color = mtl_data.map_or([1.0f32; 3], |m| m.color);
+        let alpha = mtl_data.map_or(1.0f32, |m| m.alpha);
+        let rgba: [u32; 4] = [
+            (color[0] * 255.0) as u32,
+            (color[1] * 255.0) as u32,
+            (color[2] * 255.0) as u32,
+            (alpha * 255.0) as u32,
+        ];
+        let mut colors: Vec<[u32; 4]> = Vec::new();
+        for _ in faces {
+            colors.push(rgba);
+            colors.push(rgba);
+            colors.push(rgba);
+        }
+        color_buffer.push(VertexColorBuffer {
+            id: (first_clr_len + i) as i32,
+            name: clr_name.clone(),
+            q_comp: 1,
+            q_divisor: 0,
+            q_stride: 4,
+            q_type: 5,
+            data: colors,
+            cached_minmax: None,
+        });
+
+        // MATERIALS
+
+        //tev settings
+        let mut tev_stage = material_buffer[0].mStages[0].clone();
+        tev_stage.colorStage.a = TevColorArg::rasc;
+        tev_stage.colorStage.b = TevColorArg::zero;
+        tev_stage.colorStage.c = TevColorArg::zero;
+        tev_stage.colorStage.d = TevColorArg::zero;
+        tev_stage.colorStage.scale = TevScale::scale_1;
+
+        tev_stage.alphaStage.a = TevAlphaArg::rasa;
+        tev_stage.alphaStage.b = TevAlphaArg::zero;
+        tev_stage.alphaStage.c = TevAlphaArg::zero;
+        tev_stage.alphaStage.d = TevAlphaArg::zero;
+
+        // opaue - alpha settings
+        let (alpha_compare, z_mode, blend_mode, xlu, early_z) = translucent_config();
+        material_buffer.push(JSONMaterial {
+            flag: 0,
+            id: (first_mat_len + i) as u32,
+            name: material_name,
+            fogIndex: 0,
+            lightSetIndex: 0,
+            chanData: vec![
+                // color chan
+                JSONChannelData {
+                    matColor: Color { r: 255, g: 255, b: 255, a: 255 },
+                    ambColor: Color { r: 255, g: 255, b: 255, a: 255 },
+                },
+                // alpha chan
+                JSONChannelData {
+                    matColor: Color { r: 0, g: 0, b: 0, a: 255 },
+                    ambColor: Color { r: 0, g: 0, b: 0, a: 255 },
+                },
+            ],
+            colorChanControls: vec![
+                JSONChannelControl {
+                    enabled: true,
+                    Ambient: ColorSource::Register,
+                    // i use vertex colors
+                    Material: ColorSource::Vertex,
+                    lightMask: LightID::None,
+                    diffuseFn: DiffuseFunction::Clamp,
+                    attenuationFn: AttenuationFunction::Spotlight,
+                },
+                JSONChannelControl {
+                    enabled: true,
+                    Ambient: ColorSource::Register,
+                    Material: ColorSource::Vertex,
+                    lightMask: LightID::None,
+                    diffuseFn: DiffuseFunction::Clamp,
+                    attenuationFn: AttenuationFunction::Spotlight,
+                },
+            ],
+            texMatrices: vec![],
+            samplers: vec![],
+            texGens: vec![],
+            alphaCompare: alpha_compare,
+            zMode: z_mode,
+            blendMode: blend_mode,
+            xlu,
+            earlyZComparison: early_z,
+            cullMode: CullMode::None,
+            mStages: vec![tev_stage],
+            // put the other stuff
+            ..material_buffer[0].clone()
+        });
+
+        // MESHES
+
+        mesh_buffer.push(Mesh {
+            name: mesh_name,
+            visible: true,
+            pos_buffer: pos_name,
+            clr_buffer: vec![clr_name, String::new()],
+            nrm_buffer: nrm_name,
+            uv_buffer: vec![
+                String::new(),
+                String::new(),
+                String::new(),
+                String::new(),
+                String::new(),
+                String::new(),
+                String::new(),
+                String::new(),
+            ],
+            // position, normals and color0 https://github.com/devkitPro/libogc/blob/master/gc/ogc/gx.h
+            vcd: (1 << 9) | (1 << 10) | (1 << 11),
+            current_matrix: 0,
+            mprims: vec![MatrixPrimitive {
+                matrices: vec![],
+                num_prims: 1,
+                vertex_data_buffer: build_vertex_data(faces),
+            }],
+        });
+    }
+
+    let new_draw_calls: Vec<_> = (0..obj_file.groups.len()).map(|i| JSONDrawCall {
+        material: (first_mat_len + i) as u32,
+        poly: (first_mesh_len + i) as u32,
+        prio: 0,
+    }).collect();
+
+    draw_calls.extend(new_draw_calls);
+    brres.models[0].bones[0].draw_calls = draw_calls;
+    brres.models[0].materials = material_buffer;
+    brres.models[0].meshes = mesh_buffer;
+    brres.models[0].positions = position_buffer;
+    brres.models[0].colors = color_buffer;
+    brres.models[0].normals = normal_buffer;
+
 
     Ok(())
 }
