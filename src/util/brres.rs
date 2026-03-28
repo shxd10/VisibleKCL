@@ -169,7 +169,7 @@ fn calculate_normal(v0: [f32; 3], v1: [f32; 3], v2: [f32; 3]) -> [f32; 3] {
     if len == 0.0 { [0.0, 1.0, 0.0] } else { scale(n, 1.0 / len) }
 }
 
-pub fn from_obj(brres: &mut Archive, obj: &str, mtl: &str) -> Result<(), String> {
+pub fn from_obj_replace(brres: &mut Archive, obj: &str, mtl: &str) -> Result<(), String> {
     let obj_file = parse_obj(obj)?;
     let mtl_file = parse_mtl(mtl)?;
 
@@ -406,7 +406,7 @@ pub fn from_obj(brres: &mut Archive, obj: &str, mtl: &str) -> Result<(), String>
     Ok(())
 }
 
-pub fn from_obj_cp(brres: &mut Archive, obj: &str, mtl: &str) -> Result<(), String> {
+pub fn from_obj_overlay(brres: &mut Archive, obj: &str, mtl: &str) -> Result<(), String> {
     let obj_file = parse_obj(obj)?;
     let mtl_file = parse_mtl(mtl)?;
 
@@ -431,6 +431,14 @@ pub fn from_obj_cp(brres: &mut Archive, obj: &str, mtl: &str) -> Result<(), Stri
     for (i, (mat_name, faces)) in obj_file.groups.iter().enumerate() {
         // get mtl data from the file
         let mtl_data = mtl_file.materials.iter().find(|m| &m.name == mat_name);
+        let is_alpha = mtl_data.map_or(false, |m| m.alpha < 1.0);
+        let is_cp = {
+            if mat_name.contains("ckpt") {
+                true
+            } else {
+                false
+            }
+        };
 
         // POSITIONS
         let pos_name = format!("{mat_name}_pos");
@@ -527,7 +535,12 @@ pub fn from_obj_cp(brres: &mut Archive, obj: &str, mtl: &str) -> Result<(), Stri
         tev_stage.alphaStage.d = TevAlphaArg::zero;
 
         // opaue - alpha settings
-        let (alpha_compare, z_mode, blend_mode, xlu, early_z) = translucent_config();
+        let (alpha_compare, z_mode, blend_mode, xlu, early_z) = if is_alpha {
+            translucent_config()
+        } else {
+            opaque_config()
+        };
+
         material_buffer.push(JSONMaterial {
             flag: 0,
             id: (first_mat_len + i) as u32,
@@ -573,7 +586,13 @@ pub fn from_obj_cp(brres: &mut Archive, obj: &str, mtl: &str) -> Result<(), Stri
             blendMode: blend_mode,
             xlu,
             earlyZComparison: early_z,
-            cullMode: CullMode::None,
+            cullMode: {
+                if is_cp {
+                    CullMode::None
+                } else {
+                    CullMode::Front
+                }
+            },
             mStages: vec![tev_stage],
             // put the other stuff
             ..material_buffer[0].clone()

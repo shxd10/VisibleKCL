@@ -1,11 +1,11 @@
 use clap::{Parser, Subcommand};
+use clap::ArgAction::Set;
 use std::time::Instant;
 use std::fs;
 use std::path::Path;
 
 mod util;
-use crate::util::{szs, kmp, kcl, brres, draw};
-use kcl::BaseType;
+use crate::util::{szs, kmp, kcl::{self, BaseType}, brres, draw};
 
 #[derive(Parser, Debug)]
 #[command(version, about)]
@@ -14,26 +14,26 @@ struct Cli {
     command: Command,
 }
 
+
 #[derive(Subcommand, Debug)]
 enum Command {
     #[command(alias = "x")]
     Extract { path: String },
-    Kcl { 
+    Replace { 
         path: String, 
         #[arg(long, default_value_t = false)]
         write_obj: bool,
 
-        // kmp
-        #[arg(long, default_value_t = true)]
+        #[arg(long, default_value_t = false)]
         ckpt: bool,
-        #[arg(long, default_value_t = true)]
+        #[arg(long, default_value_t = false)]
         ckpt_side: bool,
 
         #[arg(long, default_value_t = false)]
         soft_wall: bool,
         #[arg(long, default_value_t = false)]
         horizontal_wall: bool,
-
+        
         #[arg(long, default_value_t = false)]
         item_road: bool,
         #[arg(long, default_value_t = false)]
@@ -45,27 +45,26 @@ enum Command {
         #[arg(long, default_value_t = false)]
         effect_trigger: bool,
         #[arg(long, default_value_t = false)]
-        item_state_modifier: bool
+        item_state_modifier: bool,
     },
-    Ckpt { 
+    Overlay { 
         path: String, 
         #[arg(long, default_value_t = false)]
         write_obj: bool,
 
-        #[arg(long, default_value_t = true)]
+        #[arg(long, default_value_t = false)]
         ckpt: bool,
-        #[arg(long, default_value_t = true)]
+        #[arg(long, default_value_t = false)]
         ckpt_side: bool,
+        #[arg(long, default_value_t = false)]
+        inv_walls: bool,
     },
     Draw {
         path: String,
-        // kcl options
         #[arg(long, default_value_t = false)]
         wireframe: bool,
         #[arg(long, default_value_t = 0.5)]
         shading: f32,
-
-        // kmp options
         #[arg(long, default_value_t = 4)]
         thickness: u32,
         #[arg(long, default_value_t = false)]
@@ -74,9 +73,9 @@ enum Command {
         enpt: bool,
         #[arg(long, default_value_t = false)]
         itpt: bool,
-        #[arg(long, default_value_t = true)]
+        #[arg(long, default_value_t = true, action = Set)]
         ckpt: bool,
-        #[arg(long, default_value_t = true)]
+        #[arg(long, default_value_t = true, action = Set)]
         ckpt_side_lines: bool,
         #[arg(long, default_value_t = false)]
         gobj: bool,
@@ -86,9 +85,9 @@ enum Command {
         area: bool,
         #[arg(long, default_value_t = false)]
         came: bool,
-        #[arg(long, default_value_t = true)]
+        #[arg(long, default_value_t = true, action = Set)]
         jgpt: bool,
-        #[arg(long, default_value_t = true)]
+        #[arg(long, default_value_t = true, action = Set)]
         jgpt_lines: bool,
         #[arg(long, default_value_t = false)]
         cnpt: bool,
@@ -100,6 +99,7 @@ enum Command {
 pub struct KmpOption {
     pub ckpt: bool,
     pub ckpt_side: bool,
+    pub inv_walls: bool,
 }
 
 impl KmpOption {
@@ -129,11 +129,6 @@ impl SpecialPlanesOption {
             _ => false,
         }
     }
-}
-
-pub struct TriggerOption {
-    pub soft_wall: bool,
-    pub horizontal_wall: bool,
 }
 
 pub struct HighlightOption {
@@ -212,6 +207,13 @@ pub struct Object {
     pub mtl: String,
 }
 
+impl Object {
+    pub fn merge(&mut self, other: Object) {
+        self.obj.push_str(&other.obj);
+        self.mtl.push_str(&other.mtl);
+    }
+}
+
 fn write_obj_file(obj: &str, mtl: &str, name: &str) {
     fs::write(format!("{name}.obj"), &obj).unwrap();
     fs::write(format!("{name}.mtl"), &mtl).unwrap();
@@ -224,12 +226,13 @@ fn main() -> Result<(), String> {
         Command::Extract { path } => {
             szs::extract(&path)?;
         }
-        Command::Kcl { path, write_obj, ckpt, ckpt_side, soft_wall, horizontal_wall, item_road, item_wall, force_recalc, sound_trigger, effect_trigger, item_state_modifier } => {
+        Command::Replace { path, write_obj, ckpt, ckpt_side, soft_wall, horizontal_wall, item_road, item_wall, force_recalc, sound_trigger, effect_trigger, item_state_modifier } => {
             let start = Instant::now();
 
             let kmp_option = KmpOption { 
                 ckpt, 
-                ckpt_side
+                ckpt_side,
+                inv_walls: false, // not used in this
             };
 
             let highlight = HighlightOption {
@@ -257,7 +260,7 @@ fn main() -> Result<(), String> {
                 write_obj_file(&obj, &mtl, filename);
             }
 
-            brres::from_obj(&mut course.brres, &obj, &mtl)?;
+            brres::from_obj_replace(&mut course.brres, &obj, &mtl)?;
 
             let buf = course.brres.write_memory().map_err(|e| e.to_string())?;
             course.arc.replace_file("course_model.brres", buf)?;
@@ -267,17 +270,29 @@ fn main() -> Result<(), String> {
 
             println!("Took: {:?}", start.elapsed());
         }
-        Command::Ckpt { path, write_obj, ckpt, ckpt_side, } => {
+        Command::Overlay { path, write_obj, ckpt, ckpt_side, inv_walls } => {
             let start = Instant::now();
 
-            let kmp_option = KmpOption { 
-                ckpt, 
-                ckpt_side
-            };
+            let kmp_option = KmpOption { ckpt, ckpt_side, inv_walls };
 
             let filename = Path::new(&path).file_stem().unwrap().to_str().unwrap();
             let mut course = szs::parse_course_files(&path)?;
-            let object = kmp::to_obj(&course.kmp, &course.kcl, filename, &kmp_option);
+
+            let mut object = Object { obj: String::new(), mtl: String::new() };
+
+            if kmp_option.inv_walls {
+                course.kcl = course.kcl.keep(BaseType::InvisibleWall);
+                object.merge(kcl::to_obj(
+                    &course.kcl, filename,
+                    &HighlightOption { soft_wall: false, horizontal_wall: false },
+                    &SpecialPlanesOption { item_road: false, item_wall: false, force_recalc: false, sound_trigger: false, effect_trigger: false, item_state_modifier: false },
+                    &course.kmp, &kmp_option,
+                ));
+            }
+
+            if kmp_option.ckpt {
+                object.merge(kmp::to_obj(&course.kmp, &course.kcl, filename, &kmp_option));
+            }
 
             let obj = object.obj;
             let mtl = object.mtl;
@@ -286,7 +301,7 @@ fn main() -> Result<(), String> {
                 write_obj_file(&obj, &mtl, filename);
             }
 
-            brres::from_obj_cp(&mut course.brres, &obj, &mtl)?;
+            brres::from_obj_overlay(&mut course.brres, &obj, &mtl)?;
 
             let buf = course.brres.write_memory().map_err(|e| e.to_string())?;
             course.arc.replace_file("course_model.brres", buf)?;

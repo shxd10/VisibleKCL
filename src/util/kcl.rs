@@ -130,6 +130,14 @@ pub struct ParsedKcl {
     pub sections: Sections,
 }
 
+// retain every item that does not match the given base type
+impl ParsedKcl {
+    pub fn keep(mut self, base_type: BaseType) -> Self {
+        self.sections.prisms.retain(|prism| prism.flag.base_type == base_type);
+        self
+    }
+}
+
 impl Header {
     fn parse(data: &[u8]) -> Result<Self, String> {
         let pos_data_offset = read_u32(data, 0x00)?;
@@ -569,7 +577,6 @@ pub fn to_obj(
 
     let pos_buf = &parsed.sections.position_vectors;
     let nrm_buf = &parsed.sections.normals;
-
     
     // OBJ is 1-based
     let mut vertex_offset = 1usize;
