@@ -59,6 +59,7 @@ pub struct ITPH {
     pub _padding: u16,
 }
 
+#[derive(PartialEq)]
 pub enum CheckPointType {
     FinishLine,
     KeyCheckPoint,

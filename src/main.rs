@@ -23,6 +23,12 @@ enum Command {
         #[arg(long, default_value_t = false)]
         write_obj: bool,
 
+        // kmp
+        #[arg(long, default_value_t = true)]
+        ckpt: bool,
+        #[arg(long, default_value_t = true)]
+        ckpt_side: bool,
+
         #[arg(long, default_value_t = false)]
         soft_wall: bool,
         #[arg(long, default_value_t = false)]
@@ -84,6 +90,17 @@ enum Command {
         #[arg(long, default_value_t = false)]
         mspt: bool,
     },
+}
+
+pub struct KmpOption {
+    pub ckpt: bool,
+    pub ckpt_side: bool,
+}
+
+impl KmpOption {
+    pub fn any_true(&self) -> bool {
+        [self.ckpt, self.ckpt_side].iter().any(|&option| option)
+    }
 }
 
 pub struct SpecialPlanesOption {
@@ -202,8 +219,13 @@ fn main() -> Result<(), String> {
         Command::Extract { path } => {
             szs::extract(&path)?;
         }
-        Command::Kcl { path, write_obj, soft_wall, horizontal_wall, item_road, item_wall, force_recalc, sound_trigger, effect_trigger, item_state_modifier } => {
+        Command::Kcl { path, write_obj, ckpt, ckpt_side, soft_wall, horizontal_wall, item_road, item_wall, force_recalc, sound_trigger, effect_trigger, item_state_modifier } => {
             let start = Instant::now();
+
+            let kmp_option = KmpOption { 
+                ckpt, 
+                ckpt_side
+            };
 
             let highlight = HighlightOption {
                 soft_wall,
@@ -221,7 +243,8 @@ fn main() -> Result<(), String> {
 
             let filename = Path::new(&path).file_stem().unwrap().to_str().unwrap();
             let mut course = szs::parse_course_files(&path)?;
-            let object = kcl::to_obj(&course.kcl, filename, &highlight, &special);
+            let object = kcl::to_obj(&course.kcl, filename, &highlight, &special, &course.kmp, &kmp_option);
+
             let obj = object.obj;
             let mtl = object.mtl;
 

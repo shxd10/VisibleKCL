@@ -222,6 +222,13 @@ pub fn from_obj(brres: &mut Archive, obj: &str, mtl: &str) -> Result<(), String>
         // get mtl data from the file
         let mtl_data = mtl_file.materials.iter().find(|m| &m.name == mat_name);
         let is_alpha = mtl_data.map_or(false, |m| m.alpha < 1.0);
+        let is_cp = {
+            if mat_name.contains("ckpt") {
+                true
+            } else {
+                false
+            }
+        };
 
         // POSITION
 
@@ -370,7 +377,13 @@ pub fn from_obj(brres: &mut Archive, obj: &str, mtl: &str) -> Result<(), String>
             blendMode: blend_mode,
             xlu,
             earlyZComparison: early_z,
-            cullMode: CullMode::Front,
+            cullMode: {
+                if is_cp {
+                    CullMode::None
+                } else {
+                    CullMode::Front
+                }
+            },
             mStages: vec![tev_stage],
             // put the other stuff
             ..model_material[0].clone()

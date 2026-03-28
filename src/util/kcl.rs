@@ -1,5 +1,5 @@
 #![allow(dead_code)]
-use crate::{HighlightOption, Object, SpecialPlanesOption};
+use crate::{HighlightOption, KmpOption, Object, SpecialPlanesOption, util::kmp::{CheckPointType, ParsedKmp}};
 use super::binary::*;
 use std::collections::HashMap;
 
@@ -468,6 +468,142 @@ impl Sections {
     }
 }
 
+pub struct BoundingBox {
+    pub x_min: f32, pub y_min: f32, pub z_min: f32,
+    pub x_max: f32, pub y_max: f32, pub z_max: f32,
+    pub x_size: f32, pub y_size: f32, pub z_size: f32,
+    pub x_center: f32, pub y_center: f32, pub z_center: f32,
+}
+
+pub fn get_bounding_box(positions: &[[f32; 3]]) -> BoundingBox {
+    let mut x_min = f32::MAX; let mut y_min = f32::MAX; let mut z_min = f32::MAX;
+    let mut x_max = f32::MIN; let mut y_max = f32::MIN; let mut z_max = f32::MIN;
+
+    for &[x, y, z] in positions {
+        x_min = x_min.min(x); y_min = y_min.min(y); z_min = z_min.min(z);
+        x_max = x_max.max(x); y_max = y_max.max(y); z_max = z_max.max(z);
+    }
+
+    BoundingBox {
+        x_min, y_min, z_min,
+        x_max, y_max, z_max,
+        x_size: x_max - x_min,
+        y_size: y_max - y_min,
+        z_size: z_max - z_min,
+        x_center: (x_min + x_max) / 2.0,
+        y_center: (y_min + y_max) / 2.0,
+        z_center: (z_min + z_max) / 2.0,
+    }
+}
+
+fn add_checkpoint(obj: &mut String, mtl: &mut String, kmp: &ParsedKmp, bbox: BoundingBox, vertex_offset: &mut usize, side: bool) {
+    let ckpt = &kmp.ckpt;
+
+    // hardcode the checkpoint groups in the mtl
+    let alpha = 40;
+    let groups = [
+        (CheckPointType::FinishLine, "ckpt_finish", [255u8, 127, 255, alpha]),
+        (CheckPointType::KeyCheckPoint, "ckpt_key", [255u8, 0, 255, alpha]),
+        (CheckPointType::CheckPoint, "ckpt_normal", [0u8, 0, 255, alpha]),
+    ];
+    if side {
+        let side_color = [0u8, 255, 255, alpha];
+        mtl.push_str("newmtl ckpt_side\n");
+        mtl.push_str(&format!(
+            "Kd {:.4} {:.4} {:.4}\nd {:.4}\n\n",
+            side_color[0] as f32 / 255.0,
+            side_color[1] as f32 / 255.0,
+            side_color[2] as f32 / 255.0,
+            side_color[3] as f32 / 255.0,
+        ));
+
+        // write the side group once before the main loop
+        obj.push_str("g ckpt_side\nusemtl ckpt_side\n");
+    }
+
+    for (cp_type, mat_name, color) in &groups {
+        mtl.push_str(&format!("newmtl {}\n", mat_name));
+        mtl.push_str(&format!(
+            "Kd {:.4} {:.4} {:.4}\nd {:.4}\n\n",
+            color[0] as f32 / 255.0,
+            color[1] as f32 / 255.0,
+            color[2] as f32 / 255.0,
+            color[3] as f32 / 255.0,
+        ));
+
+        obj.push_str(&format!("g {}\n", mat_name));
+        obj.push_str(&format!("usemtl {}\n", mat_name));
+
+        // use peekable for the ckpt sides
+        let mut iter = ckpt.entries.iter().peekable();
+        while let Some(checkpoint) = iter.next() {
+            if checkpoint.checkpoint_type() != *cp_type { continue; }
+            
+            let (x0, z0) = (checkpoint.left_point[0], checkpoint.left_point[1]);
+            let (x1, z1) = (checkpoint.right_point[0], checkpoint.right_point[1]);
+            let y = bbox.y_max + 500.0; // some padding
+            let v0 = [x0, y, z0]; // top left
+            let v1 = [x1, y, z1]; // top right
+            let v2 = [x1, 0.0, z1]; // bottom right
+            let v3 = [x0, 0.0, z0]; // bottom left
+            // vert
+            obj.push_str(&format!("v {} {} {}\n", v0[0], v0[1], v0[2]));
+            obj.push_str(&format!("v {} {} {}\n", v1[0], v1[1], v1[2]));
+            obj.push_str(&format!("v {} {} {}\n", v2[0], v2[1], v2[2]));
+            obj.push_str(&format!("v {} {} {}\n", v3[0], v3[1], v3[2]));
+            // i pull vertex offset to keep count of the previous vertices count (from the actual kcl)
+            let base = *vertex_offset;
+            *vertex_offset += 4;
+            obj.push_str(&format!("f {} {} {}\n", base, base + 1, base + 2));
+            obj.push_str(&format!("f {} {} {}\n", base, base + 2, base + 3));
+
+            if side {
+                // circular looping
+                // last cp has the first as next, avoiding the last not connecting to the firsr
+                let next = iter.peek().copied().unwrap_or(&ckpt.entries[0]);
+
+                let (nx0, nz0) = (next.left_point[0], next.left_point[1]);
+                let (nx1, nz1) = (next.right_point[0], next.right_point[1]);
+
+                // left
+                let lv0 = [x0, y, z0];
+                let lv1 = [nx0, y, nz0];
+                let lv2 = [nx0, 0.0, nz0];
+                let lv3 = [x0, 0.0, z0];
+                obj.push_str(&format!("v {} {} {}\n", lv0[0], lv0[1], lv0[2]));
+                obj.push_str(&format!("v {} {} {}\n", lv1[0], lv1[1], lv1[2]));
+                obj.push_str(&format!("v {} {} {}\n", lv2[0], lv2[1], lv2[2]));
+                obj.push_str(&format!("v {} {} {}\n", lv3[0], lv3[1], lv3[2]));
+                let base = *vertex_offset;
+                *vertex_offset += 4;
+                obj.push_str(&format!("f {} {} {}\n", base, base + 1, base + 2));
+                obj.push_str(&format!("f {} {} {}\n", base, base + 2, base + 3));
+
+                // right
+                let rv0 = [x1, y, z1];
+                let rv1 = [nx1, y, nz1];
+                let rv2 = [nx1, 0.0, nz1];
+                let rv3 = [x1, 0.0, z1];
+                obj.push_str(&format!("v {} {} {}\n", rv0[0], rv0[1], rv0[2]));
+                obj.push_str(&format!("v {} {} {}\n", rv1[0], rv1[1], rv1[2]));
+                obj.push_str(&format!("v {} {} {}\n", rv2[0], rv2[1], rv2[2]));
+                obj.push_str(&format!("v {} {} {}\n", rv3[0], rv3[1], rv3[2]));
+                let base = *vertex_offset;
+                *vertex_offset += 4;
+                obj.push_str(&format!("f {} {} {}\n", base, base + 1, base + 2));
+                obj.push_str(&format!("f {} {} {}\n", base, base + 2, base + 3));
+            }
+        }
+        obj.push('\n');
+    }
+}
+
+fn add_kmp(obj: &mut String, mtl: &mut String, kmp: &ParsedKmp, kmp_option: &KmpOption, bbox: BoundingBox, vertex_offset: &mut usize) {
+    if kmp_option.ckpt {
+        add_checkpoint(obj, mtl, kmp, bbox, vertex_offset, kmp_option.ckpt_side);
+    }
+}
+
 fn prism_to_triangle(prism: &Prism, positions: &[[f32; 3]], normals: &[[f32; 3]]) -> [[f32; 3]; 3] {
     let pos = positions[prism.pos_i as usize];
     let fnrm = normals[prism.fnrm_i as usize];
@@ -518,7 +654,14 @@ struct GroupKey {
     is_horizontal: bool,
 }
 
-pub fn to_obj(parsed: &ParsedKcl, name: &str, highlight_option: &HighlightOption, special_planes: &SpecialPlanesOption) -> Object {
+pub fn to_obj(
+    parsed: &ParsedKcl, 
+    name: &str, 
+    highlight_option: &HighlightOption, 
+    special_planes: &SpecialPlanesOption, 
+    kmp: &ParsedKmp,
+    kmp_option: &KmpOption,
+) -> Object {
     let mut obj = String::new();
     let mut mtl = String::new();
 
@@ -528,9 +671,10 @@ pub fn to_obj(parsed: &ParsedKcl, name: &str, highlight_option: &HighlightOption
     let pos_buf = &parsed.sections.position_vectors;
     let nrm_buf = &parsed.sections.normals;
 
+    
     // OBJ is 1-based
     let mut vertex_offset = 1usize;
-
+    
     // map groups by base type and collision effects
     let mut groups: HashMap<GroupKey, Vec<usize>> = HashMap::new();
     for (i, prism) in parsed.sections.prisms.iter().enumerate() {
@@ -565,11 +709,9 @@ pub fn to_obj(parsed: &ParsedKcl, name: &str, highlight_option: &HighlightOption
             if soft_wall { "_soft" } else { "" },
             if horizontal { "_horizontal" } else { "" },
         );
-
-        if special_planes.is_hidden(base_type) {
-            continue;
-        }
-
+        
+        if special_planes.is_hidden(base_type) { continue }
+        
         let highlight = {
             if is_wall(base_type) {
                 highlight_option.color(soft_wall, horizontal)
@@ -587,7 +729,7 @@ pub fn to_obj(parsed: &ParsedKcl, name: &str, highlight_option: &HighlightOption
                 base_type.color()
             }
         };
-
+        
         // Write MTL entry for this flag (RGB 0.0-1.0).
         mtl.push_str(&format!("newmtl {}\n", name));
         // from int 255 to float 1.0
@@ -598,7 +740,7 @@ pub fn to_obj(parsed: &ParsedKcl, name: &str, highlight_option: &HighlightOption
             color[2] as f32 / 255.0,
             color[3] as f32 / 255.0,
         ));
-
+        
         // Write OBJ group + material reference.
         obj.push_str(&format!("g {}\n", name));
         obj.push_str(&format!("usemtl {}\n", name));
@@ -614,12 +756,18 @@ pub fn to_obj(parsed: &ParsedKcl, name: &str, highlight_option: &HighlightOption
             vertex_offset += 3;
             faces.push([base, base + 1, base + 2]);
         }
-
+        
         for f in &faces {
             obj.push_str(&format!("f {} {} {}\n", f[0], f[1], f[2]));
         }
 
         obj.push('\n');
+    }
+
+    // if whatever value is true run kmp
+    if kmp_option.any_true() {
+        let bbox = get_bounding_box(pos_buf);
+        add_kmp(&mut obj, &mut mtl, kmp, kmp_option, bbox, &mut vertex_offset);
     }
 
     Object {obj, mtl}
