@@ -5,6 +5,8 @@ use std::fs;
 use std::path::Path;
 
 mod util;
+use crate::util::enums::{self, Gobj};
+use crate::util::szs::CourseFiles;
 use crate::util::{szs, kmp, kcl::{self, BaseType}, brres, draw};
 
 #[derive(Parser, Debug)]
@@ -28,6 +30,8 @@ enum Command {
         ckpt: bool,
         #[arg(long, default_value_t = false)]
         ckpt_side: bool,
+        #[arg(long, default_value_t = false)]
+        gobj: bool,
 
         #[arg(long, default_value_t = false)]
         soft_wall: bool,
@@ -58,6 +62,9 @@ enum Command {
         ckpt_side: bool,
         #[arg(long, default_value_t = false)]
         inv_walls: bool,
+
+        #[arg(long, default_value_t = false)]
+        gobj: bool,
     },
     Draw {
         path: String,
@@ -96,15 +103,27 @@ enum Command {
     },
 }
 
-pub struct KmpOption {
+pub struct OverlayOption {
     pub ckpt: bool,
     pub ckpt_side: bool,
     pub inv_walls: bool,
+    pub gobj: bool,
 }
 
-impl KmpOption {
+impl OverlayOption {
     pub fn any_true(&self) -> bool {
         [self.ckpt, self.ckpt_side].iter().any(|&option| option)
+    }
+}
+
+impl Default for OverlayOption {
+    fn default() -> Self {
+        OverlayOption {
+            ckpt: false,
+            ckpt_side: false,
+            inv_walls: false,
+            gobj: false,
+        }
     }
 }
 
@@ -131,6 +150,19 @@ impl SpecialPlanesOption {
     }
 }
 
+impl Default for SpecialPlanesOption {
+    fn default() -> Self {
+        SpecialPlanesOption {
+            item_road: false,
+            item_wall: false,
+            force_recalc: false,
+            sound_trigger: false,
+            effect_trigger: false,
+            item_state_modifier: false,
+        }
+    }
+}
+
 pub struct HighlightOption {
     pub soft_wall: bool,
     pub horizontal_wall: bool,
@@ -144,6 +176,15 @@ impl HighlightOption {
             (true, true) => Some([255, 200, 80, 255]), // orange ish: indicates intersection (might be useful for some stuff, it's pretty annoying sometimes when a tri is both BR and HW)
             (true, false) | (false, true) => Some([255, 240, 80, 255]), // yellow ish
             _ => None,
+        }
+    }
+}
+
+impl Default for HighlightOption {
+    fn default() -> Self {
+        HighlightOption {
+            soft_wall: false,
+            horizontal_wall: false,
         }
     }
 }
@@ -208,9 +249,9 @@ pub struct Object {
 }
 
 impl Object {
-    pub fn merge(&mut self, other: Object) {
-        self.obj.push_str(&other.obj);
-        self.mtl.push_str(&other.mtl);
+    pub fn replace(&mut self, other_object: Object) {
+        self.obj.push_str(&other_object.obj);
+        self.mtl.push_str(&other_object.mtl);
     }
 }
 
@@ -219,6 +260,55 @@ fn write_obj_file(obj: &str, mtl: &str, name: &str) {
     fs::write(format!("{name}.mtl"), &mtl).unwrap();
 }
 
+fn write_szs(course: &CourseFiles, filename: &str) -> Result<(), String> {
+    let szs_buf = szs::write_arc_to_szs(&course.arc)?;
+    fs::write(format!("{}.szs", filename), szs_buf).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+fn replace_gobj(course: &mut CourseFiles) -> Result<(), String> {
+    // every .brres file in the szs that is NOT course_model, map_model, or vrcorn_model
+    let brres_names: Vec<String> = course.arc.nodes.iter()
+        .filter(|n| n.name.ends_with(".brres") && !matches!(n.name.as_str(), "course_model.brres" | "map_model.brres" | "vrcorn_model.brres"))
+        .map(|n| n.name.clone())
+        .collect();
+
+    // replace with custom brres from epik
+    for name in brres_names {
+        let Ok(buf) = fs::read(format!("src/gobj/{}", name)) else { continue };
+        course.arc.replace_file(&name, buf)?;
+    }
+
+    // need the enum to know which objects have kcl and what they're called
+    let kcl_names: Vec<&'static str> = course.kmp.gobj.entries.iter()
+        .filter_map(|entry| Gobj::from_u16(entry.id)?.kcl_name())
+        .collect::<std::collections::HashSet<_>>()
+        .into_iter()
+        .collect();
+
+    // yes im gonna be honest i vibe coded this part
+    for name in kcl_names {
+        let kcl_filename = format!("{}.kcl", name);
+        let brres_filename = format!("{}.brres", name);
+
+        let Some(kcl_node) = course.arc.nodes.iter().find(|n| n.name == kcl_filename) else { continue };
+        let kcl_data = course.arc.data[kcl_node.data_offset as usize..(kcl_node.data_offset + kcl_node.data_size) as usize].to_vec();
+        let parsed_kcl = kcl::parse(&kcl_data)?;
+
+        let Some(brres_node) = course.arc.nodes.iter().find(|n| n.name == brres_filename) else { continue };
+        let brres_data = course.arc.data[brres_node.data_offset as usize..(brres_node.data_offset + brres_node.data_size) as usize].to_vec();
+        let mut parsed_brres = brres::parse(&brres_data).map_err(|e| e.to_string())?;
+
+        let object = kcl::to_obj(&parsed_kcl, name, &HighlightOption::default(), &SpecialPlanesOption::default(), &course.kmp, &OverlayOption::default());
+        brres::from_obj_replace(&mut parsed_brres, &object.obj, &object.mtl)?;
+        let buf = parsed_brres.write_memory().map_err(|e| e.to_string())?;
+        course.arc.replace_file(&brres_filename, buf)?;
+    }
+
+    Ok(())
+}
+
+
 fn main() -> Result<(), String> {
     let command = Cli::parse().command;
 
@@ -226,13 +316,14 @@ fn main() -> Result<(), String> {
         Command::Extract { path } => {
             szs::extract(&path)?;
         }
-        Command::Replace { path, write_obj, ckpt, ckpt_side, soft_wall, horizontal_wall, item_road, item_wall, force_recalc, sound_trigger, effect_trigger, item_state_modifier } => {
+        Command::Replace { path, write_obj, ckpt, ckpt_side, gobj, soft_wall, horizontal_wall, item_road, item_wall, force_recalc, sound_trigger, effect_trigger, item_state_modifier } => {
             let start = Instant::now();
 
-            let kmp_option = KmpOption { 
+            let overlay_option = OverlayOption { 
                 ckpt, 
                 ckpt_side,
                 inv_walls: false, // not used in this
+                gobj
             };
 
             let highlight = HighlightOption {
@@ -251,64 +342,64 @@ fn main() -> Result<(), String> {
 
             let filename = Path::new(&path).file_stem().unwrap().to_str().unwrap();
             let mut course = szs::parse_course_files(&path)?;
-            let object = kcl::to_obj(&course.kcl, filename, &highlight, &special, &course.kmp, &kmp_option);
+            let object = kcl::to_obj(&course.kcl, filename, &highlight, &special, &course.kmp, &overlay_option);
 
             let obj = object.obj;
             let mtl = object.mtl;
 
-            if write_obj {
-                write_obj_file(&obj, &mtl, filename);
-            }
+            if write_obj { write_obj_file(&obj, &mtl, filename); }
 
             brres::from_obj_replace(&mut course.brres, &obj, &mtl)?;
 
             let buf = course.brres.write_memory().map_err(|e| e.to_string())?;
             course.arc.replace_file("course_model.brres", buf)?;
+            if overlay_option.gobj {
+                replace_gobj(&mut course)?;
+            }
 
-            let szs_bytes = szs::write_arc_to_szs(&course.arc)?;
-            fs::write(format!("{}.szs", filename), szs_bytes).map_err(|e| e.to_string())?;
-
+            write_szs(&course, filename)?;
             println!("Took: {:?}", start.elapsed());
         }
-        Command::Overlay { path, write_obj, ckpt, ckpt_side, inv_walls } => {
+        Command::Overlay { path, write_obj, ckpt, ckpt_side, inv_walls, gobj } => {
             let start = Instant::now();
 
-            let kmp_option = KmpOption { ckpt, ckpt_side, inv_walls };
+            let overlay_option = OverlayOption { ckpt, ckpt_side, inv_walls, gobj };
 
             let filename = Path::new(&path).file_stem().unwrap().to_str().unwrap();
             let mut course = szs::parse_course_files(&path)?;
 
             let mut object = Object { obj: String::new(), mtl: String::new() };
 
-            if kmp_option.inv_walls {
+            // if the user enables inv walls on overlay, delete every kcl flag other than inv wall (keep())
+            // .replace() is for replacing the object with the one returned by to_obj
+            if overlay_option.inv_walls {
                 course.kcl = course.kcl.keep(BaseType::InvisibleWall);
-                object.merge(kcl::to_obj(
+                object.replace(kcl::to_obj(
                     &course.kcl, filename,
-                    &HighlightOption { soft_wall: false, horizontal_wall: false },
-                    &SpecialPlanesOption { item_road: false, item_wall: false, force_recalc: false, sound_trigger: false, effect_trigger: false, item_state_modifier: false },
-                    &course.kmp, &kmp_option,
+                    &HighlightOption::default(),
+                    &SpecialPlanesOption::default(),
+                    &course.kmp, &overlay_option,
                 ));
             }
 
-            if kmp_option.ckpt {
-                object.merge(kmp::to_obj(&course.kmp, &course.kcl, filename, &kmp_option));
+            if overlay_option.ckpt || overlay_option.ckpt_side {
+                object.replace(kmp::to_obj(&course.kmp, &course.kcl, filename, &overlay_option));
             }
 
             let obj = object.obj;
             let mtl = object.mtl;
 
-            if write_obj {
-                write_obj_file(&obj, &mtl, filename);
-            }
+            if write_obj { write_obj_file(&obj, &mtl, filename); }
 
             brres::from_obj_overlay(&mut course.brres, &obj, &mtl)?;
 
             let buf = course.brres.write_memory().map_err(|e| e.to_string())?;
             course.arc.replace_file("course_model.brres", buf)?;
 
-            let szs_bytes = szs::write_arc_to_szs(&course.arc)?;
-            fs::write(format!("{}.szs", filename), szs_bytes).map_err(|e| e.to_string())?;
-
+            if overlay_option.gobj {
+                replace_gobj(&mut course)?;
+            }
+            write_szs(&course, filename)?;
             println!("Took: {:?}", start.elapsed());
         }
         Command::Draw { 

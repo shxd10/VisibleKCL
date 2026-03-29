@@ -1,5 +1,5 @@
 #![allow(dead_code)]
-use crate::{HighlightOption, KmpOption, Object, SpecialPlanesOption, util::kmp::{CheckPointType, ParsedKmp}};
+use crate::{HighlightOption, OverlayOption, Object, SpecialPlanesOption, util::kmp::{CheckPointType, ParsedKmp}};
 use super::binary::*;
 use super::kmp::add_checkpoint;
 use std::collections::HashMap;
@@ -505,9 +505,9 @@ pub fn get_bounding_box(positions: &[[f32; 3]]) -> BoundingBox {
     }
 }
 
-fn add_kmp(obj: &mut String, mtl: &mut String, kmp: &ParsedKmp, kmp_option: &KmpOption, bbox: BoundingBox, vertex_offset: &mut usize) {
-    if kmp_option.ckpt {
-        add_checkpoint(obj, mtl, kmp, bbox, vertex_offset, kmp_option.ckpt_side);
+fn add_kmp(obj: &mut String, mtl: &mut String, kmp: &ParsedKmp, overlay: &OverlayOption, bbox: BoundingBox, vertex_offset: &mut usize) {
+    if overlay.ckpt {
+        add_checkpoint(obj, mtl, kmp, bbox, vertex_offset, overlay.ckpt_side);
     }
 }
 
@@ -567,7 +567,7 @@ pub fn to_obj(
     highlight_option: &HighlightOption, 
     special_planes: &SpecialPlanesOption, 
     kmp: &ParsedKmp,
-    kmp_option: &KmpOption,
+    overlay: &OverlayOption,
 ) -> Object {
     let mut obj = String::new();
     let mut mtl = String::new();
@@ -671,9 +671,9 @@ pub fn to_obj(
     }
 
     // if whatever value is true run kmp
-    if kmp_option.any_true() {
+    if overlay.any_true() {
         let bbox = get_bounding_box(pos_buf);
-        add_kmp(&mut obj, &mut mtl, kmp, kmp_option, bbox, &mut vertex_offset);
+        add_kmp(&mut obj, &mut mtl, kmp, overlay, bbox, &mut vertex_offset);
     }
 
     Object {obj, mtl}

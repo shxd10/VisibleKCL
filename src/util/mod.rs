@@ -4,3 +4,4 @@ pub mod kmp;
 pub mod kcl;
 pub mod draw;
 pub mod brres;
+pub mod enums;

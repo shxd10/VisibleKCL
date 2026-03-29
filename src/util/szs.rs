@@ -30,7 +30,7 @@ pub struct ParsedNode {
 pub struct ParsedArc {
     pub header: Header,
     pub nodes: Vec<ParsedNode>,
-    data: Vec<u8>,
+    pub data: Vec<u8>,
 }
 
 impl ParsedArc {

@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 use crate::util::kcl::*;
-use crate::{KmpOption, Object};
+use crate::{OverlayOption, Object};
 use super::binary::*;
 
 // https://wiki.tockdom.com/wiki/KMP_(File_Format)
@@ -540,7 +540,7 @@ pub fn add_checkpoint(obj: &mut String, mtl: &mut String, kmp: &ParsedKmp, bbox:
     }
 }
 
-pub fn to_obj(kmp: &ParsedKmp, kcl: &ParsedKcl, name: &str, kmp_option: &KmpOption) -> Object {
+pub fn to_obj(kmp: &ParsedKmp, kcl: &ParsedKcl, name: &str, overlay: &OverlayOption) -> Object {
     let mut obj = String::new();
     let mut mtl = String::new();
 
@@ -554,8 +554,8 @@ pub fn to_obj(kmp: &ParsedKmp, kcl: &ParsedKcl, name: &str, kmp_option: &KmpOpti
     // OBJ is 1-based
     let mut vertex_offset = 1usize;
 
-    if kmp_option.ckpt {
-        add_checkpoint(&mut obj, &mut mtl, kmp, kcl_bbox, &mut vertex_offset, kmp_option.ckpt_side);
+    if overlay.ckpt {
+        add_checkpoint(&mut obj, &mut mtl, kmp, kcl_bbox, &mut vertex_offset, overlay.ckpt_side);
     }
 
     Object {obj, mtl}
