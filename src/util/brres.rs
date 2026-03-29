@@ -439,6 +439,11 @@ pub fn from_obj_replace(brres: &mut Archive, obj: &str, mtl: &str) -> Result<(),
         })
         .collect();
 
+    // reset root bone transform
+    brres.models[0].bones[0].scale = [1.0, 1.0, 1.0];
+    brres.models[0].bones[0].rotate = [0.0, 0.0, 0.0];
+    brres.models[0].bones[0].translate = [0.0, 0.0, 0.0];
+
     Ok(())
 }
 
@@ -687,6 +692,11 @@ pub fn from_obj_overlay(brres: &mut Archive, obj: &str, mtl: &str) -> Result<(),
 
     draw_calls.extend(new_draw_calls);
     brres.models[0].bones[0].draw_calls = draw_calls;
+    // reset root bone transform
+    brres.models[0].bones[0].scale = [1.0, 1.0, 1.0];
+    brres.models[0].bones[0].rotate = [0.0, 0.0, 0.0];
+    brres.models[0].bones[0].translate = [0.0, 0.0, 0.0];
+
     brres.models[0].materials = material_buffer;
     brres.models[0].meshes = mesh_buffer;
     brres.models[0].positions = position_buffer;
