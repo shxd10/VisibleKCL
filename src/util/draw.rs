@@ -63,7 +63,15 @@ fn draw_simple_line(img: &mut RgbImage, x0: i32, y0: i32, x1: i32, y1: i32, colo
 }
 
 // simply drawing 2 lines close to eachother
-fn draw_line(img: &mut RgbImage, x0: i32, y0: i32, x1: i32, y1: i32, color: Rgb<u8>, thickness: u32) {
+fn draw_line(
+    img: &mut RgbImage,
+    x0: i32,
+    y0: i32,
+    x1: i32,
+    y1: i32,
+    color: Rgb<u8>,
+    thickness: u32,
+) {
     let half = (thickness / 2) as i32;
     for i in -half..=half {
         draw_simple_line(img, x0 + i, y0, x1 + i, y1, color);
@@ -135,7 +143,13 @@ impl Default for CircleDraw {
     }
 }
 
-fn draw_point(img: &mut RgbImage, x: i32, y: i32, color: Rgb<u8>, CircleDraw { r, outline_color }: CircleDraw) {
+fn draw_point(
+    img: &mut RgbImage,
+    x: i32,
+    y: i32,
+    color: Rgb<u8>,
+    CircleDraw { r, outline_color }: CircleDraw,
+) {
     draw_circle(img, x, y, r, color, true);
     draw_circle(img, x, y, r + 1, outline_color, false);
 }
@@ -175,12 +189,20 @@ fn shade_color(color: Rgb<u8>, brightness: f32) -> Rgb<u8> {
     ])
 }
 
-fn draw_kcl(img: &mut RgbImage, parsed: &ParsedKcl, to_pixel: &dyn Fn(f32, f32) -> (i32, i32), options: &KclDrawOptions) {
+fn draw_kcl(
+    img: &mut RgbImage,
+    parsed: &ParsedKcl,
+    to_pixel: &dyn Fn(f32, f32) -> (i32, i32),
+    options: &KclDrawOptions,
+) {
     // define draw priority for the more important and less important flags (on top and under)
     let priority = |flag: &Flag| -> u8 {
         match flag.base_type {
             BaseType::FallBoundary | BaseType::SolidFall => 0,
-            BaseType::Wall | BaseType::Wall2 | BaseType::InvisibleWall | BaseType::InvisibleWall2 => 1,
+            BaseType::Wall
+            | BaseType::Wall2
+            | BaseType::InvisibleWall
+            | BaseType::InvisibleWall2 => 1,
             _ => 2,
         }
     };
@@ -257,7 +279,7 @@ struct PointColors {
     came: Rgb<u8>,
     jgpt: Rgb<u8>,
     cnpt: Rgb<u8>,
-    mspt: Rgb<u8>
+    mspt: Rgb<u8>,
 }
 
 impl PointColors {
@@ -283,7 +305,7 @@ impl PointColors {
             came: Rgb([128, 26, 179]),
             jgpt: Rgb([255, 255, 0]),
             cnpt: Rgb([255, 0, 0]),
-            mspt: Rgb([128, 0, 255])
+            mspt: Rgb([128, 0, 255]),
         }
     }
 }
@@ -299,7 +321,14 @@ struct ConnectedPointsDraw {
     thickness: u32,
 }
 
-fn draw_connected_points(img: &mut RgbImage, ConnectedPointsDraw { points, line_color, thickness }: ConnectedPointsDraw) {
+fn draw_connected_points(
+    img: &mut RgbImage,
+    ConnectedPointsDraw {
+        points,
+        line_color,
+        thickness,
+    }: ConnectedPointsDraw,
+) {
     for (i, &(x, z)) in points.iter().enumerate() {
         if let Some(&(nx, nz)) = points.get(i + 1) {
             draw_line(img, x, z, nx, nz, line_color, thickness);
@@ -307,7 +336,12 @@ fn draw_connected_points(img: &mut RgbImage, ConnectedPointsDraw { points, line_
     }
 }
 
-fn draw_ktpt(img: &mut RgbImage, ktpt: &Section<KTPT>, to_pixel: &dyn Fn(f32, f32) -> (i32, i32), thickness: u32) {
+fn draw_ktpt(
+    img: &mut RgbImage,
+    ktpt: &Section<KTPT>,
+    to_pixel: &dyn Fn(f32, f32) -> (i32, i32),
+    thickness: u32,
+) {
     let color = PointColors::new().ktpt;
     for entry in ktpt.entries.iter() {
         let (px, pz) = to_pixel(entry.pos[0], entry.pos[2]);
@@ -316,7 +350,13 @@ fn draw_ktpt(img: &mut RgbImage, ktpt: &Section<KTPT>, to_pixel: &dyn Fn(f32, f3
     }
 }
 
-fn draw_enpt(img: &mut RgbImage, enpt: &Section<ENPT>, enph: &Section<ENPH>, to_pixel: &dyn Fn(f32, f32) -> (i32, i32), thickness: u32) {
+fn draw_enpt(
+    img: &mut RgbImage,
+    enpt: &Section<ENPT>,
+    enph: &Section<ENPH>,
+    to_pixel: &dyn Fn(f32, f32) -> (i32, i32),
+    thickness: u32,
+) {
     let color = PointColors::new().enpt;
     let first_color = PointColors::new().first_enpt;
 
@@ -337,23 +377,40 @@ fn draw_enpt(img: &mut RgbImage, enpt: &Section<ENPT>, enph: &Section<ENPH>, to_
         let end = start + group.point_len as usize;
         let group_points = points[start..end].to_vec();
 
-        draw_connected_points(img, ConnectedPointsDraw {
-            points: group_points,
-            line_color: PointColors::new().enpt_line,
-            thickness,
-        });
+        draw_connected_points(
+            img,
+            ConnectedPointsDraw {
+                points: group_points,
+                line_color: PointColors::new().enpt_line,
+                thickness,
+            },
+        );
 
         // connect last point of this group to first point of each next group
         let last = &points[end - 1];
         for &next_gi in group.next_group.iter().filter(|&&i| i != 0xFF) {
             let next_group = &enph.entries[next_gi as usize];
             let next_first = points[next_group.point_start as usize];
-            draw_line(img, last.0, last.1, next_first.0, next_first.1, PointColors::new().enpt_line, thickness);
+            draw_line(
+                img,
+                last.0,
+                last.1,
+                next_first.0,
+                next_first.1,
+                PointColors::new().enpt_line,
+                thickness,
+            );
         }
     }
 }
 
-fn draw_itpt(img: &mut RgbImage, itpt: &Section<ITPT>, itph: &Section<ITPH>, to_pixel: &dyn Fn(f32, f32) -> (i32, i32), thickness: u32) {
+fn draw_itpt(
+    img: &mut RgbImage,
+    itpt: &Section<ITPT>,
+    itph: &Section<ITPH>,
+    to_pixel: &dyn Fn(f32, f32) -> (i32, i32),
+    thickness: u32,
+) {
     let color = PointColors::new().itpt;
     let first_color = PointColors::new().first_itpt;
 
@@ -374,23 +431,41 @@ fn draw_itpt(img: &mut RgbImage, itpt: &Section<ITPT>, itph: &Section<ITPH>, to_
         let end = start + group.point_len as usize;
         let group_points = points[start..end].to_vec();
 
-        draw_connected_points(img, ConnectedPointsDraw {
-            points: group_points,
-            line_color: PointColors::new().itpt_line,
-            thickness,
-        });
+        draw_connected_points(
+            img,
+            ConnectedPointsDraw {
+                points: group_points,
+                line_color: PointColors::new().itpt_line,
+                thickness,
+            },
+        );
 
         // connect last point of this group to first point of each next group
         let last = &points[end - 1];
         for &next_gi in group.next_group.iter().filter(|&&i| i != 0xFF) {
             let next_group = &itph.entries[next_gi as usize];
             let next_first = points[next_group.point_start as usize];
-            draw_line(img, last.0, last.1, next_first.0, next_first.1, PointColors::new().itpt_line, thickness);
+            draw_line(
+                img,
+                last.0,
+                last.1,
+                next_first.0,
+                next_first.1,
+                PointColors::new().itpt_line,
+                thickness,
+            );
         }
     }
 }
 
-fn draw_ckpt(img: &mut RgbImage, ckpt: &Section<CKPT>, ckph: &Section<CKPH>, to_pixel: &dyn Fn(f32, f32) -> (i32, i32), thickness: u32, side: bool) {
+fn draw_ckpt(
+    img: &mut RgbImage,
+    ckpt: &Section<CKPT>,
+    ckph: &Section<CKPH>,
+    to_pixel: &dyn Fn(f32, f32) -> (i32, i32),
+    thickness: u32,
+    side: bool,
+) {
     let mut checkpoints: Vec<CPDraw> = vec![];
     for checkpoint in &ckpt.entries {
         let color = cp_colors(&checkpoint.checkpoint_type());
@@ -412,22 +487,59 @@ fn draw_ckpt(img: &mut RgbImage, ckpt: &Section<CKPT>, ckph: &Section<CKPH>, to_
             for i in start..end - 1 {
                 let cp = &checkpoints[i];
                 let next = &checkpoints[i + 1];
-                draw_line(img, cp.left.0, cp.left.1, next.left.0, next.left.1, color, thickness);
-                draw_line(img, cp.right.0, cp.right.1, next.right.0, next.right.1, color, thickness);
+                draw_line(
+                    img,
+                    cp.left.0,
+                    cp.left.1,
+                    next.left.0,
+                    next.left.1,
+                    color,
+                    thickness,
+                );
+                draw_line(
+                    img,
+                    cp.right.0,
+                    cp.right.1,
+                    next.right.0,
+                    next.right.1,
+                    color,
+                    thickness,
+                );
             }
 
             let last = &checkpoints[end - 1];
             for &next_gi in group.next_groups.iter().filter(|&&i| i != 0xFF) {
                 let next_group = &ckph.entries[next_gi as usize];
                 let next_first = &checkpoints[next_group.first_cp as usize];
-                draw_line(img, last.left.0, last.left.1, next_first.left.0, next_first.left.1, color, thickness);
-                draw_line(img, last.right.0, last.right.1, next_first.right.0, next_first.right.1, color, thickness);
+                draw_line(
+                    img,
+                    last.left.0,
+                    last.left.1,
+                    next_first.left.0,
+                    next_first.left.1,
+                    color,
+                    thickness,
+                );
+                draw_line(
+                    img,
+                    last.right.0,
+                    last.right.1,
+                    next_first.right.0,
+                    next_first.right.1,
+                    color,
+                    thickness,
+                );
             }
         }
     }
 }
 
-fn draw_gobj(img: &mut RgbImage, gobj: &Section<GOBJ>, to_pixel: &dyn Fn(f32, f32) -> (i32, i32), thickness: u32) {
+fn draw_gobj(
+    img: &mut RgbImage,
+    gobj: &Section<GOBJ>,
+    to_pixel: &dyn Fn(f32, f32) -> (i32, i32),
+    thickness: u32,
+) {
     let color = PointColors::new().gobj;
     for entry in gobj.entries.iter() {
         let (px, pz) = to_pixel(entry.pos[0], entry.pos[2]);
@@ -436,7 +548,12 @@ fn draw_gobj(img: &mut RgbImage, gobj: &Section<GOBJ>, to_pixel: &dyn Fn(f32, f3
     }
 }
 
-fn draw_poti(img: &mut RgbImage, poti: &Section<POTI>, to_pixel: &dyn Fn(f32, f32) -> (i32, i32), thickness: u32) {
+fn draw_poti(
+    img: &mut RgbImage,
+    poti: &Section<POTI>,
+    to_pixel: &dyn Fn(f32, f32) -> (i32, i32),
+    thickness: u32,
+) {
     for route in &poti.entries {
         let mut points: Vec<(i32, i32)> = vec![];
         for entry in &route.points {
@@ -444,19 +561,33 @@ fn draw_poti(img: &mut RgbImage, poti: &Section<POTI>, to_pixel: &dyn Fn(f32, f3
         }
         for (i, &(x, z)) in points.iter().enumerate() {
             match i {
-                0 => draw_point(img, x, z, PointColors::new().first_poti, CircleDraw::default()),
+                0 => draw_point(
+                    img,
+                    x,
+                    z,
+                    PointColors::new().first_poti,
+                    CircleDraw::default(),
+                ),
                 _ => draw_point(img, x, z, PointColors::new().poti, CircleDraw::default()),
             };
         }
-        draw_connected_points(img, ConnectedPointsDraw { 
-            points: points,
-            line_color: PointColors::new().poti_line,
-            thickness: thickness,
-        });
+        draw_connected_points(
+            img,
+            ConnectedPointsDraw {
+                points: points,
+                line_color: PointColors::new().poti_line,
+                thickness: thickness,
+            },
+        );
     }
 }
 
-fn draw_area(img: &mut RgbImage, area: &Section<AREA>, to_pixel: &dyn Fn(f32, f32) -> (i32, i32), thickness: u32) {
+fn draw_area(
+    img: &mut RgbImage,
+    area: &Section<AREA>,
+    to_pixel: &dyn Fn(f32, f32) -> (i32, i32),
+    thickness: u32,
+) {
     let color = PointColors::new().area;
     for entry in area.entries.iter() {
         let (px, pz) = to_pixel(entry.pos[0], entry.pos[2]);
@@ -465,7 +596,12 @@ fn draw_area(img: &mut RgbImage, area: &Section<AREA>, to_pixel: &dyn Fn(f32, f3
     }
 }
 
-fn draw_came(img: &mut RgbImage, came: &Section<CAME>, to_pixel: &dyn Fn(f32, f32) -> (i32, i32), thickness: u32) {
+fn draw_came(
+    img: &mut RgbImage,
+    came: &Section<CAME>,
+    to_pixel: &dyn Fn(f32, f32) -> (i32, i32),
+    thickness: u32,
+) {
     let color = PointColors::new().came;
     for entry in came.entries.iter() {
         let (px, pz) = to_pixel(entry.pos[0], entry.pos[2]);
@@ -474,7 +610,14 @@ fn draw_came(img: &mut RgbImage, came: &Section<CAME>, to_pixel: &dyn Fn(f32, f3
     }
 }
 
-fn draw_jgpt(img: &mut RgbImage, jgpt: &Section<JGPT>, ckpt: &Section<CKPT>, to_pixel: &dyn Fn(f32, f32) -> (i32, i32), thickness: u32, lines: bool) {
+fn draw_jgpt(
+    img: &mut RgbImage,
+    jgpt: &Section<JGPT>,
+    ckpt: &Section<CKPT>,
+    to_pixel: &dyn Fn(f32, f32) -> (i32, i32),
+    thickness: u32,
+    lines: bool,
+) {
     let color = PointColors::new().jgpt;
     for (i, respawn) in jgpt.entries.iter().enumerate() {
         let (px, pz) = to_pixel(respawn.pos[0], respawn.pos[2]);
@@ -491,7 +634,12 @@ fn draw_jgpt(img: &mut RgbImage, jgpt: &Section<JGPT>, ckpt: &Section<CKPT>, to_
     }
 }
 
-fn draw_cnpt(img: &mut RgbImage, cnpt: &Section<CNPT>, to_pixel: &dyn Fn(f32, f32) -> (i32, i32), thickness: u32) {
+fn draw_cnpt(
+    img: &mut RgbImage,
+    cnpt: &Section<CNPT>,
+    to_pixel: &dyn Fn(f32, f32) -> (i32, i32),
+    thickness: u32,
+) {
     let color = PointColors::new().cnpt;
     for entry in cnpt.entries.iter() {
         let (px, pz) = to_pixel(entry.dest_pos[0], entry.dest_pos[2]);
@@ -500,7 +648,12 @@ fn draw_cnpt(img: &mut RgbImage, cnpt: &Section<CNPT>, to_pixel: &dyn Fn(f32, f3
     }
 }
 
-fn draw_mspt(img: &mut RgbImage, mspt: &Section<MSPT>, to_pixel: &dyn Fn(f32, f32) -> (i32, i32), thickness: u32) {
+fn draw_mspt(
+    img: &mut RgbImage,
+    mspt: &Section<MSPT>,
+    to_pixel: &dyn Fn(f32, f32) -> (i32, i32),
+    thickness: u32,
+) {
     let color = PointColors::new().mspt;
     for entry in mspt.entries.iter() {
         let (px, pz) = to_pixel(entry.pos[0], entry.pos[2]);
@@ -509,33 +662,86 @@ fn draw_mspt(img: &mut RgbImage, mspt: &Section<MSPT>, to_pixel: &dyn Fn(f32, f3
     }
 }
 
-fn draw_kmp(img: &mut RgbImage, parsed: &ParsedKmp, to_pixel: &dyn Fn(f32, f32) -> (i32, i32), options: &KmpDrawOptions) {
+fn draw_kmp(
+    img: &mut RgbImage,
+    parsed: &ParsedKmp,
+    to_pixel: &dyn Fn(f32, f32) -> (i32, i32),
+    options: &KmpDrawOptions,
+) {
     let ckpt = &parsed.ckpt;
     let thickness = options.thickness;
 
-    if options.ktpt { draw_ktpt(img, &parsed.ktpt, to_pixel, thickness); }
-    if options.enpt { draw_enpt(img, &parsed.enpt, &parsed.enph, to_pixel, thickness / 2); }
-    if options.itpt { draw_itpt(img, &parsed.itpt, &parsed.itph, to_pixel, thickness / 2); }
-    if options.gobj { draw_gobj(img, &parsed.gobj, to_pixel, thickness); }
-    if options.poti { draw_poti(img, &parsed.poti, to_pixel, thickness / 2); }
-    if options.area { draw_area(img, &parsed.area, to_pixel, thickness); }
-    if options.came { draw_came(img, &parsed.came, to_pixel, thickness); }
-    if options.jgpt { draw_jgpt(img, &parsed.jgpt, ckpt, to_pixel, thickness, options.jgpt_lines); }
-    if options.cnpt { draw_cnpt(img, &parsed.cnpt, to_pixel, thickness); }
-    if options.mspt { draw_mspt(img, &parsed.mspt, to_pixel, thickness); }
+    if options.ktpt {
+        draw_ktpt(img, &parsed.ktpt, to_pixel, thickness);
+    }
+    if options.enpt {
+        draw_enpt(img, &parsed.enpt, &parsed.enph, to_pixel, thickness / 2);
+    }
+    if options.itpt {
+        draw_itpt(img, &parsed.itpt, &parsed.itph, to_pixel, thickness / 2);
+    }
+    if options.gobj {
+        draw_gobj(img, &parsed.gobj, to_pixel, thickness);
+    }
+    if options.poti {
+        draw_poti(img, &parsed.poti, to_pixel, thickness / 2);
+    }
+    if options.area {
+        draw_area(img, &parsed.area, to_pixel, thickness);
+    }
+    if options.came {
+        draw_came(img, &parsed.came, to_pixel, thickness);
+    }
+    if options.jgpt {
+        draw_jgpt(
+            img,
+            &parsed.jgpt,
+            ckpt,
+            to_pixel,
+            thickness,
+            options.jgpt_lines,
+        );
+    }
+    if options.cnpt {
+        draw_cnpt(img, &parsed.cnpt, to_pixel, thickness);
+    }
+    if options.mspt {
+        draw_mspt(img, &parsed.mspt, to_pixel, thickness);
+    }
     // cps drawn later because, well, they're the main point
-    if options.ckpt { draw_ckpt(img, ckpt, &parsed.ckph, to_pixel, thickness, options.ckpt_side_lines); }
+    if options.ckpt {
+        draw_ckpt(
+            img,
+            ckpt,
+            &parsed.ckph,
+            to_pixel,
+            thickness,
+            options.ckpt_side_lines,
+        );
+    }
 }
 
-pub fn to_image(szs_path: &str, kcl_options: &KclDrawOptions, kmp_options: &KmpDrawOptions) -> RgbImage {
+pub fn to_image(
+    szs_path: &str,
+    kcl_options: &KclDrawOptions,
+    kmp_options: &KmpDrawOptions,
+) -> RgbImage {
     let parsed = parse_course_files(szs_path).expect("failed to parse kmp/kcl");
     let kcl = &parsed.kcl;
     let kmp = &parsed.kmp;
 
     // bbox
-    let used_positions: Vec<[f32; 3]> = kcl.sections.prisms.iter()
+    let used_positions: Vec<[f32; 3]> = kcl
+        .sections
+        .prisms
+        .iter()
         // ignore fall boundaries on bounding box for those tracks with extended fall boundaries
-        .filter(|p| !matches!(p.flag.base_type, BaseType::FallBoundary | BaseType::SolidFall))
+        .filter(|p| {
+            !matches!(
+                p.flag.base_type,
+                BaseType::FallBoundary | BaseType::SolidFall
+            )
+        })
         .map(|p| kcl.sections.position_vectors[p.pos_i as usize])
         .filter(|p| p[0].is_finite() && p[2].is_finite())
         .collect();

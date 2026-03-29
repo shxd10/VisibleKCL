@@ -1,7 +1,7 @@
+use super::{binary::*, kcl, kmp};
+use anyhow::Result;
 use std::fs;
 use std::path::{Path, PathBuf};
-use super::{kcl, kmp, binary::*};
-use anyhow::Result;
 
 // https://wiki.tockdom.com/wiki/U8_(File_Format)
 
@@ -16,8 +16,8 @@ pub struct Header {
 pub struct Node {
     pub node_type: u8,
     pub string_offset: u32, // this is actually u24
-    pub data_offset: u32, // Index of parent directory
-    pub data_size: u32, // Index of first node that is not part of this directory
+    pub data_offset: u32,   // Index of parent directory
+    pub data_size: u32,     // Index of first node that is not part of this directory
 }
 
 pub struct ParsedNode {
@@ -36,28 +36,30 @@ pub struct ParsedArc {
 impl ParsedArc {
     pub fn replace_file(&mut self, name: &str, new_data: Vec<u8>) -> Result<(), String> {
         // find the node
-        let node = self.nodes.iter_mut()
+        let node = self
+            .nodes
+            .iter_mut()
             .find(|n| n.name == name)
             .ok_or(format!("File not found: {}", name))?;
-        
+
         let old_size = node.data_size as usize;
         let new_size = new_data.len();
         let offset = node.data_offset as usize;
-        
+
         // replace data in the raw data vec
         self.data.splice(offset..offset + old_size, new_data);
-        
+
         // update sizes of affected nodes
         let size_diff = new_size as i64 - old_size as i64;
         node.data_size = new_size as u32;
-        
+
         // update offsets of all nodes that come after this one
         for n in self.nodes.iter_mut() {
             if n.node_type == 0 && n.data_offset as usize > offset {
                 n.data_offset = (n.data_offset as i64 + size_diff) as u32;
             }
         }
-        
+
         Ok(())
     }
 }
@@ -68,7 +70,7 @@ impl Header {
         if magic != 0x55AA382D {
             return Err("Invalid magic number".into());
         }
-        
+
         let first_node = read_i32(data, 0x04)?;
         let node_size = read_i32(data, 0x08)?;
         let data_offset = read_i32(data, 0x0C)?;
@@ -79,7 +81,13 @@ impl Header {
             read_i32(data, 0x1C)?,
         ];
 
-        Ok(Header { magic, first_node, node_size, data_offset, _reserved })
+        Ok(Header {
+            magic,
+            first_node,
+            node_size,
+            data_offset,
+            _reserved,
+        })
     }
 }
 
@@ -90,7 +98,12 @@ impl Node {
         let data_offset = read_u32(node_offset, 0x04)?;
         let data_size = read_u32(node_offset, 0x08)?;
 
-        Ok(Node { node_type, string_offset, data_offset, data_size })
+        Ok(Node {
+            node_type,
+            string_offset,
+            data_offset,
+            data_size,
+        })
     }
 }
 
@@ -116,7 +129,8 @@ fn parse_arc(data: &[u8]) -> Result<ParsedArc, String> {
         let offset = header.first_node as usize + i * 0x0C;
         let node = Node::parse(&data[offset..])?;
         let string = &data[string_pool_start + node.string_offset as usize..];
-        let name = String::from_utf8_lossy(string.split(|&b| b == 0).next().unwrap_or(&[])).to_string();
+        let name =
+            String::from_utf8_lossy(string.split(|&b| b == 0).next().unwrap_or(&[])).to_string();
 
         let parsed_node = ParsedNode {
             node_type: node.node_type,
@@ -127,7 +141,11 @@ fn parse_arc(data: &[u8]) -> Result<ParsedArc, String> {
 
         parsed_nodes.push(parsed_node);
     }
-    Ok(ParsedArc { header, nodes: parsed_nodes, data: data.to_vec() })
+    Ok(ParsedArc {
+        header,
+        nodes: parsed_nodes,
+        data: data.to_vec(),
+    })
 }
 
 fn write_arc(arc: &ParsedArc) -> Vec<u8> {
@@ -199,8 +217,7 @@ pub fn extract(path: &str) -> Result<String, String> {
     let parsed_szs = parse_from_path(path)?;
 
     let folder = Path::new(path).with_extension("d");
-    fs::create_dir_all(&folder)
-        .map_err(|e| format!("Failed to create dir: {}", e))?;
+    fs::create_dir_all(&folder).map_err(|e| format!("Failed to create dir: {}", e))?;
 
     let mut dir_stack: Vec<(usize, PathBuf)> = Vec::new();
 
@@ -213,14 +230,18 @@ pub fn extract(path: &str) -> Result<String, String> {
                 break;
             }
         }
-        
+
         // some wacky workaround for subfolders and files
-        let current_dir = dir_stack.last().map(|(_, p)| p.as_path()).unwrap_or(folder.as_path());
+        let current_dir = dir_stack
+            .last()
+            .map(|(_, p)| p.as_path())
+            .unwrap_or(folder.as_path());
         let node_path = current_dir.join(&node.name);
 
         match node.node_type {
             0 => {
-                let file_data = &parsed_szs.data[node.data_offset as usize..(node.data_offset + node.data_size) as usize];
+                let file_data = &parsed_szs.data
+                    [node.data_offset as usize..(node.data_offset + node.data_size) as usize];
                 fs::write(&node_path, file_data)
                     .map_err(|e| format!("Failed to write file: {}", e))?;
             }
@@ -249,19 +270,31 @@ pub struct CourseFiles {
 pub fn parse_course_files(path: &str) -> Result<CourseFiles, String> {
     let parsed = parse_from_path(path)?;
 
-    let kmp = parsed.nodes.iter()
+    let kmp = parsed
+        .nodes
+        .iter()
         .find(|n| n.name == "course.kmp")
-        .map(|n| parsed.data[n.data_offset as usize..(n.data_offset + n.data_size) as usize].to_vec())
+        .map(|n| {
+            parsed.data[n.data_offset as usize..(n.data_offset + n.data_size) as usize].to_vec()
+        })
         .ok_or("course.kmp not found")?;
 
-    let kcl = parsed.nodes.iter()
+    let kcl = parsed
+        .nodes
+        .iter()
         .find(|n| n.name == "course.kcl")
-        .map(|n| parsed.data[n.data_offset as usize..(n.data_offset + n.data_size) as usize].to_vec())
+        .map(|n| {
+            parsed.data[n.data_offset as usize..(n.data_offset + n.data_size) as usize].to_vec()
+        })
         .ok_or("course.kcl not found")?;
 
-    let brres = parsed.nodes.iter()
+    let brres = parsed
+        .nodes
+        .iter()
         .find(|n| n.name == "course_model.brres")
-        .map(|n| parsed.data[n.data_offset as usize..(n.data_offset + n.data_size) as usize].to_vec())
+        .map(|n| {
+            parsed.data[n.data_offset as usize..(n.data_offset + n.data_size) as usize].to_vec()
+        })
         .ok_or("course_model.brres not found")?;
 
     Ok(CourseFiles {

@@ -1,7 +1,10 @@
 #![allow(dead_code)]
-use crate::{HighlightOption, OverlayOption, Object, SpecialPlanesOption, util::kmp::{CheckPointType, ParsedKmp}};
 use super::binary::*;
 use super::kmp::add_checkpoint;
+use crate::{
+    HighlightOption, Object, OverlayOption, SpecialPlanesOption,
+    util::kmp::{CheckPointType, ParsedKmp},
+};
 use std::collections::HashMap;
 
 // https://wiki.tockdom.com/wiki/KCL_(File_Format)
@@ -21,8 +24,6 @@ pub struct Header {
     pub area_xy_blocks_shift: u32,
     pub sphere_radius: Option<f32>,
 }
-
-
 
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
 pub enum BaseType {
@@ -133,7 +134,9 @@ pub struct ParsedKcl {
 // retain every item that does not match the given base type
 impl ParsedKcl {
     pub fn keep(mut self, base_type: BaseType) -> Self {
-        self.sections.prisms.retain(|prism| prism.flag.base_type == base_type);
+        self.sections
+            .prisms
+            .retain(|prism| prism.flag.base_type == base_type);
         self
     }
 }
@@ -339,7 +342,13 @@ impl Flag {
         let blight = Blight::from_u16((value >> 8) & 0x7)?;
         let wheel_depth = WheelDepth::from_u16((value >> 11) & 0x3)?;
         let collision_effect = CollisionEffect::from_u16(value);
-        Ok(Flag { base_type, variant, blight, wheel_depth, collision_effect })
+        Ok(Flag {
+            base_type,
+            variant,
+            blight,
+            wheel_depth,
+            collision_effect,
+        })
     }
 
     pub fn to_u16(&self) -> u16 {
@@ -410,7 +419,7 @@ impl CollisionEffect {
             (true, _, _) => [255, 254, 230, 255], // trickable = light yellow
             (_, true, _) => [218, 177, 218, 255], // reject road = pink-ish
             (_, _, true) => [0, 0, 0, 255], // this is here for uh no reason, since i use HighlightOption for br
-            _ => [255, 255, 255, 255], // fallback never used
+            _ => [255, 255, 255, 255],      // fallback never used
         }
     }
 }
@@ -478,24 +487,44 @@ impl Sections {
 }
 
 pub struct BoundingBox {
-    pub x_min: f32, pub y_min: f32, pub z_min: f32,
-    pub x_max: f32, pub y_max: f32, pub z_max: f32,
-    pub x_size: f32, pub y_size: f32, pub z_size: f32,
-    pub x_center: f32, pub y_center: f32, pub z_center: f32,
+    pub x_min: f32,
+    pub y_min: f32,
+    pub z_min: f32,
+    pub x_max: f32,
+    pub y_max: f32,
+    pub z_max: f32,
+    pub x_size: f32,
+    pub y_size: f32,
+    pub z_size: f32,
+    pub x_center: f32,
+    pub y_center: f32,
+    pub z_center: f32,
 }
 
 pub fn get_bounding_box(positions: &[[f32; 3]]) -> BoundingBox {
-    let mut x_min = f32::MAX; let mut y_min = f32::MAX; let mut z_min = f32::MAX;
-    let mut x_max = f32::MIN; let mut y_max = f32::MIN; let mut z_max = f32::MIN;
+    let mut x_min = f32::MAX;
+    let mut y_min = f32::MAX;
+    let mut z_min = f32::MAX;
+    let mut x_max = f32::MIN;
+    let mut y_max = f32::MIN;
+    let mut z_max = f32::MIN;
 
     for &[x, y, z] in positions {
-        x_min = x_min.min(x); y_min = y_min.min(y); z_min = z_min.min(z);
-        x_max = x_max.max(x); y_max = y_max.max(y); z_max = z_max.max(z);
+        x_min = x_min.min(x);
+        y_min = y_min.min(y);
+        z_min = z_min.min(z);
+        x_max = x_max.max(x);
+        y_max = y_max.max(y);
+        z_max = z_max.max(z);
     }
 
     BoundingBox {
-        x_min, y_min, z_min,
-        x_max, y_max, z_max,
+        x_min,
+        y_min,
+        z_min,
+        x_max,
+        y_max,
+        z_max,
         x_size: x_max - x_min,
         y_size: y_max - y_min,
         z_size: z_max - z_min,
@@ -505,7 +534,14 @@ pub fn get_bounding_box(positions: &[[f32; 3]]) -> BoundingBox {
     }
 }
 
-fn add_kmp(obj: &mut String, mtl: &mut String, kmp: &ParsedKmp, overlay: &OverlayOption, bbox: BoundingBox, vertex_offset: &mut usize) {
+fn add_kmp(
+    obj: &mut String,
+    mtl: &mut String,
+    kmp: &ParsedKmp,
+    overlay: &OverlayOption,
+    bbox: BoundingBox,
+    vertex_offset: &mut usize,
+) {
     if overlay.ckpt {
         add_checkpoint(obj, mtl, kmp, bbox, vertex_offset, overlay.ckpt_side);
     }
@@ -527,17 +563,21 @@ fn prism_to_triangle(prism: &Prism, positions: &[[f32; 3]], normals: &[[f32; 3]]
     [v1, v2, v3]
 }
 
-fn is_road(base_type: BaseType) -> bool { 
-    matches!(base_type,
-        BaseType::Road | BaseType::Road2
-    )
+fn is_road(base_type: BaseType) -> bool {
+    matches!(base_type, BaseType::Road | BaseType::Road2)
 }
 
 fn is_wall(base_type: BaseType) -> bool {
-    matches!(base_type,
-        BaseType::Wall | BaseType::Wall2 | BaseType::InvisibleWall |
-        BaseType::InvisibleWall2 | BaseType::SpecialWall | BaseType::WeakWall |
-        BaseType::PlayerOnlyWall | BaseType::HalfPipeInvisibleWall
+    matches!(
+        base_type,
+        BaseType::Wall
+            | BaseType::Wall2
+            | BaseType::InvisibleWall
+            | BaseType::InvisibleWall2
+            | BaseType::SpecialWall
+            | BaseType::WeakWall
+            | BaseType::PlayerOnlyWall
+            | BaseType::HalfPipeInvisibleWall
     )
 }
 
@@ -551,7 +591,11 @@ fn is_horizontal(fnrm: [f32; 3]) -> bool {
     let dp = dot(fnrm, up);
     let facing_up = dp > 0.0; // so ceilings aren't highlighted
     let angle = dp.abs().acos().to_degrees();
-    if facing_up { angle < fixed_angle } else { false }
+    if facing_up {
+        angle < fixed_angle
+    } else {
+        false
+    }
 }
 
 #[derive(Hash, Eq, PartialEq, Clone, Copy)]
@@ -562,10 +606,10 @@ struct GroupKey {
 }
 
 pub fn to_obj(
-    parsed: &ParsedKcl, 
-    name: &str, 
-    highlight_option: &HighlightOption, 
-    special_planes: &SpecialPlanesOption, 
+    parsed: &ParsedKcl,
+    name: &str,
+    highlight_option: &HighlightOption,
+    special_planes: &SpecialPlanesOption,
     kmp: &ParsedKmp,
     overlay: &OverlayOption,
 ) -> Object {
@@ -577,17 +621,18 @@ pub fn to_obj(
 
     let pos_buf = &parsed.sections.position_vectors;
     let nrm_buf = &parsed.sections.normals;
-    
+
     // OBJ is 1-based
     let mut vertex_offset = 1usize;
-    
+
     // map groups by base type and collision effects
     let mut groups: HashMap<GroupKey, Vec<usize>> = HashMap::new();
     for (i, prism) in parsed.sections.prisms.iter().enumerate() {
         let key = GroupKey {
             base_type: prism.flag.base_type,
             collision_effect: prism.flag.collision_effect,
-            is_horizontal: is_horizontal(nrm_buf[prism.fnrm_i as usize]) && is_wall(prism.flag.base_type),
+            is_horizontal: is_horizontal(nrm_buf[prism.fnrm_i as usize])
+                && is_wall(prism.flag.base_type),
         };
         groups.entry(key).or_default().push(i);
     }
@@ -607,17 +652,20 @@ pub fn to_obj(
         let reject_road = collision_effect.reject_road && is_road(base_type);
         let soft_wall = collision_effect.soft_wall && is_wall(base_type);
         let horizontal = key.is_horizontal;
-        
-        let name = format!("{}{}{}{}{}",
+
+        let name = format!(
+            "{}{}{}{}{}",
             flag.base_type.name(),
             if trickable { "_trickable" } else { "" },
             if reject_road { "_reject" } else { "" },
             if soft_wall { "_soft" } else { "" },
             if horizontal { "_horizontal" } else { "" },
         );
-        
-        if special_planes.is_hidden(base_type) { continue }
-        
+
+        if special_planes.is_hidden(base_type) {
+            continue;
+        }
+
         let highlight = {
             if is_wall(base_type) {
                 highlight_option.color(soft_wall, horizontal)
@@ -635,7 +683,7 @@ pub fn to_obj(
                 base_type.color()
             }
         };
-        
+
         // Write MTL entry for this flag (RGB 0.0-1.0).
         mtl.push_str(&format!("newmtl {}\n", name));
         // from int 255 to float 1.0
@@ -646,7 +694,7 @@ pub fn to_obj(
             color[2] as f32 / 255.0,
             color[3] as f32 / 255.0,
         ));
-        
+
         // Write OBJ group + material reference.
         obj.push_str(&format!("g {}\n", name));
         obj.push_str(&format!("usemtl {}\n", name));
@@ -662,7 +710,7 @@ pub fn to_obj(
             vertex_offset += 3;
             faces.push([base, base + 1, base + 2]);
         }
-        
+
         for f in &faces {
             obj.push_str(&format!("f {} {} {}\n", f[0], f[1], f[2]));
         }
@@ -676,7 +724,7 @@ pub fn to_obj(
         add_kmp(&mut obj, &mut mtl, kmp, overlay, bbox, &mut vertex_offset);
     }
 
-    Object {obj, mtl}
+    Object { obj, mtl }
 }
 
 pub fn parse(data: &[u8]) -> Result<ParsedKcl, String> {

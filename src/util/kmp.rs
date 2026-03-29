@@ -1,7 +1,7 @@
 #![allow(dead_code)]
-use crate::util::kcl::*;
-use crate::{OverlayOption, Object};
 use super::binary::*;
+use crate::util::kcl::*;
+use crate::{Object, OverlayOption};
 
 // https://wiki.tockdom.com/wiki/KMP_(File_Format)
 
@@ -220,7 +220,14 @@ impl Header {
         let sections_offset_start = header_len as usize - section_count as usize * 0x04;
         let sections_offset = read_vec_u32(data, sections_offset_start, section_count as usize)?;
 
-        Ok(Header { magic, file_len, section_count, header_len, ver_num, sections_offset })
+        Ok(Header {
+            magic,
+            file_len,
+            section_count,
+            header_len,
+            ver_num,
+            sections_offset,
+        })
     }
 }
 
@@ -229,7 +236,11 @@ impl SectionHeader {
         let name = String::from_utf8_lossy(&data[offset..offset + 0x04]).to_string();
         let entry_num = read_u16(data, offset + 0x04)?;
         let other_value = read_u16(data, offset + 0x06)?;
-        Ok(SectionHeader { name, entry_num, other_value })
+        Ok(SectionHeader {
+            name,
+            entry_num,
+            other_value,
+        })
     }
 }
 
@@ -238,7 +249,12 @@ impl KTPT {
         let pos = read_vec_f32(data, offset, 3)?.try_into().unwrap();
         let rot = read_vec_f32(data, offset + 0x0C, 3)?.try_into().unwrap();
         let player_index = read_i16(data, offset + 0x18)?;
-        Ok(KTPT { pos, rot, player_index, _padding: 0 })
+        Ok(KTPT {
+            pos,
+            rot,
+            player_index,
+            _padding: 0,
+        })
     }
 }
 
@@ -249,7 +265,13 @@ impl ENPT {
         let set1 = read_u16(data, offset + 0x10)?;
         let set2 = read_u8(data, offset + 0x12)?;
         let set3 = read_u8(data, offset + 0x13)?;
-        Ok(ENPT { pos, enemy_deviation, set1, set2, set3 })
+        Ok(ENPT {
+            pos,
+            enemy_deviation,
+            set1,
+            set2,
+            set3,
+        })
     }
 }
 
@@ -260,7 +282,13 @@ impl ENPH {
         let previous_group = read_vec_u8(data, offset + 0x02, 6)?.try_into().unwrap();
         let next_group = read_vec_u8(data, offset + 0x08, 6)?.try_into().unwrap();
         let group_link_flags = read_u16(data, offset + 0x0E)?;
-        Ok(ENPH { point_start, point_len, previous_group, next_group, group_link_flags })
+        Ok(ENPH {
+            point_start,
+            point_len,
+            previous_group,
+            next_group,
+            group_link_flags,
+        })
     }
 }
 
@@ -270,7 +298,12 @@ impl ITPT {
         let bullet_range = read_f32(data, offset + 0x0C)?;
         let set1 = read_u16(data, offset + 0x10)?;
         let set2 = read_u16(data, offset + 0x12)?;
-        Ok(ITPT { pos, bullet_range, set1, set2 })
+        Ok(ITPT {
+            pos,
+            bullet_range,
+            set1,
+            set2,
+        })
     }
 }
 
@@ -280,7 +313,13 @@ impl ITPH {
         let point_len = read_u8(data, offset + 0x01)?;
         let previous_group = read_vec_u8(data, offset + 0x02, 6)?.try_into().unwrap();
         let next_group = read_vec_u8(data, offset + 0x08, 6)?.try_into().unwrap();
-        Ok(ITPH { point_start, point_len, previous_group, next_group, _padding: 0 })
+        Ok(ITPH {
+            point_start,
+            point_len,
+            previous_group,
+            next_group,
+            _padding: 0,
+        })
     }
 }
 
@@ -299,7 +338,14 @@ impl CKPT {
         let cp_type = read_u8(data, offset + 0x11)? as i8;
         let previous_cp = read_u8(data, offset + 0x12)?;
         let next_cp = read_u8(data, offset + 0x13)?;
-        Ok(CKPT { left_point, right_point, respawn_index, cp_type, previous_cp, next_cp })
+        Ok(CKPT {
+            left_point,
+            right_point,
+            respawn_index,
+            cp_type,
+            previous_cp,
+            next_cp,
+        })
     }
 }
 
@@ -309,7 +355,13 @@ impl CKPH {
         let cp_count = read_u8(data, offset + 0x01)?;
         let previous_groups = read_vec_u8(data, offset + 0x02, 6)?.try_into().unwrap();
         let next_groups = read_vec_u8(data, offset + 0x08, 6)?.try_into().unwrap();
-        Ok(CKPH { first_cp, cp_count, previous_groups, next_groups, _padding: 0 })
+        Ok(CKPH {
+            first_cp,
+            cp_count,
+            previous_groups,
+            next_groups,
+            _padding: 0,
+        })
     }
 }
 
@@ -322,7 +374,16 @@ impl GOBJ {
         let route = read_u16(data, offset + 0x28)?;
         let settings = read_vec_u16(data, offset + 0x2A, 8)?.try_into().unwrap();
         let presence_flags = read_u16(data, offset + 0x3A)?;
-        Ok(GOBJ { id, _padding: 0, pos, rot, scale, route, settings, presence_flags })
+        Ok(GOBJ {
+            id,
+            _padding: 0,
+            pos,
+            rot,
+            scale,
+            route,
+            settings,
+            presence_flags,
+        })
     }
 }
 
@@ -331,7 +392,11 @@ impl RouteHeader {
         let points_count = read_u16(data, offset)?;
         let set1 = read_u8(data, offset + 0x02)?;
         let set2 = read_u8(data, offset + 0x03)?;
-        Ok(RouteHeader { points_count, set1, set2 })
+        Ok(RouteHeader {
+            points_count,
+            set1,
+            set2,
+        })
     }
 }
 
@@ -340,7 +405,11 @@ impl RoutePoints {
         let pos = read_vec_f32(data, offset, 3)?.try_into().unwrap();
         let set = read_u16(data, offset + 0x0C)?;
         let additional_set = read_u16(data, offset + 0x0E)?;
-        Ok(RoutePoints { pos, set, additional_set })
+        Ok(RoutePoints {
+            pos,
+            set,
+            additional_set,
+        })
     }
 }
 
@@ -368,7 +437,20 @@ impl AREA {
         let set2 = read_u16(data, offset + 0x2A)?;
         let route_id = read_u8(data, offset + 0x2C)?;
         let enemy_id = read_u8(data, offset + 0x2D)?;
-        Ok(AREA { shape, area_type, came_index, priority_value, pos, rot, scale, set1, set2, route_id, enemy_id, _padding: 0 })
+        Ok(AREA {
+            shape,
+            area_type,
+            came_index,
+            priority_value,
+            pos,
+            rot,
+            scale,
+            set1,
+            set2,
+            route_id,
+            enemy_id,
+            _padding: 0,
+        })
     }
 }
 
@@ -390,7 +472,24 @@ impl CAME {
         let start_view_vec = read_vec_f32(data, offset + 0x2C, 3)?.try_into().unwrap();
         let dest_view_vec = read_vec_f32(data, offset + 0x38, 3)?.try_into().unwrap();
         let time_active = read_f32(data, offset + 0x44)?;
-        Ok(CAME { camera_type, next_camera, camshake, used_route, camera_point_velocity, zooming_velocity, view_point_velocity, start_flag, movie_flag, pos, rot, zoom_start, zoom_end, start_view_vec, dest_view_vec, time_active })
+        Ok(CAME {
+            camera_type,
+            next_camera,
+            camshake,
+            used_route,
+            camera_point_velocity,
+            zooming_velocity,
+            view_point_velocity,
+            start_flag,
+            movie_flag,
+            pos,
+            rot,
+            zoom_start,
+            zoom_end,
+            start_view_vec,
+            dest_view_vec,
+            time_active,
+        })
     }
 }
 
@@ -400,7 +499,12 @@ impl JGPT {
         let rot = read_vec_f32(data, offset + 0x0C, 3)?.try_into().unwrap();
         let respawn_id = read_u16(data, offset + 0x18)?;
         let user_data = read_i16(data, offset + 0x1A)?;
-        Ok(JGPT { pos, rot, respawn_id, user_data })
+        Ok(JGPT {
+            pos,
+            rot,
+            respawn_id,
+            user_data,
+        })
     }
 }
 
@@ -410,7 +514,12 @@ impl CNPT {
         let release_angle = read_vec_f32(data, offset + 0x0C, 3)?.try_into().unwrap();
         let cannon_id = read_u16(data, offset + 0x18)?;
         let shoot_effect = read_i16(data, offset + 0x1A)?;
-        Ok(CNPT { dest_pos, release_angle, cannon_id, shoot_effect })
+        Ok(CNPT {
+            dest_pos,
+            release_angle,
+            cannon_id,
+            shoot_effect,
+        })
     }
 }
 
@@ -420,7 +529,12 @@ impl MSPT {
         let rot = read_vec_f32(data, offset + 0x0C, 3)?.try_into().unwrap();
         let entry_id = read_u16(data, offset + 0x18)?;
         let _unknown = read_u16(data, offset + 0x1A)?;
-        Ok(MSPT { pos, rot, entry_id, _unknown })
+        Ok(MSPT {
+            pos,
+            rot,
+            entry_id,
+            _unknown,
+        })
     }
 }
 
@@ -434,19 +548,47 @@ impl STGI {
         let flare_transparency = read_u8(data, offset + 0x08)?;
         let padding1 = read_u16(data, offset + 0x09)?;
         let padding2 = read_u8(data, offset + 0x0B)?;
-        Ok(STGI { lap_count, pole_pos, distance, lens_flare, flare_color, flare_transparency, padding1, padding2 })
+        Ok(STGI {
+            lap_count,
+            pole_pos,
+            distance,
+            lens_flare,
+            flare_color,
+            flare_transparency,
+            padding1,
+            padding2,
+        })
     }
 }
 
-pub fn add_checkpoint(obj: &mut String, mtl: &mut String, kmp: &ParsedKmp, bbox: BoundingBox, vertex_offset: &mut usize, side: bool) {
+pub fn add_checkpoint(
+    obj: &mut String,
+    mtl: &mut String,
+    kmp: &ParsedKmp,
+    bbox: BoundingBox,
+    vertex_offset: &mut usize,
+    side: bool,
+) {
     let ckpt = &kmp.ckpt;
 
     // hardcode the checkpoint groups in the mtl
     let alpha = 50;
     let groups = [
-        (CheckPointType::FinishLine, "ckpt_finish", [255u8, 127, 255, alpha]),
-        (CheckPointType::KeyCheckPoint, "ckpt_key", [255u8, 0, 255, alpha]),
-        (CheckPointType::CheckPoint, "ckpt_normal", [0u8, 0, 255, alpha]),
+        (
+            CheckPointType::FinishLine,
+            "ckpt_finish",
+            [255u8, 127, 255, alpha],
+        ),
+        (
+            CheckPointType::KeyCheckPoint,
+            "ckpt_key",
+            [255u8, 0, 255, alpha],
+        ),
+        (
+            CheckPointType::CheckPoint,
+            "ckpt_normal",
+            [0u8, 0, 255, alpha],
+        ),
     ];
     if side {
         let side_color = [0u8, 255, 255, alpha];
@@ -479,8 +621,10 @@ pub fn add_checkpoint(obj: &mut String, mtl: &mut String, kmp: &ParsedKmp, bbox:
         // use peekable for the ckpt sides
         let mut iter = ckpt.entries.iter().peekable();
         while let Some(checkpoint) = iter.next() {
-            if checkpoint.checkpoint_type() != *cp_type { continue; }
-            
+            if checkpoint.checkpoint_type() != *cp_type {
+                continue;
+            }
+
             let (x0, z0) = (checkpoint.left_point[0], checkpoint.left_point[1]);
             let (x1, z1) = (checkpoint.right_point[0], checkpoint.right_point[1]);
             let y = bbox.y_max + 500.0; // some padding
@@ -550,19 +694,33 @@ pub fn to_obj(kmp: &ParsedKmp, kcl: &ParsedKcl, name: &str, overlay: &OverlayOpt
     let kcl_pos_buf = &kcl.sections.position_vectors;
     let kcl_nrm_buf = &kcl.sections.normals;
     let kcl_bbox = get_bounding_box(kcl_pos_buf);
-    
+
     // OBJ is 1-based
     let mut vertex_offset = 1usize;
 
     if overlay.ckpt {
-        add_checkpoint(&mut obj, &mut mtl, kmp, kcl_bbox, &mut vertex_offset, overlay.ckpt_side);
+        add_checkpoint(
+            &mut obj,
+            &mut mtl,
+            kmp,
+            kcl_bbox,
+            &mut vertex_offset,
+            overlay.ckpt_side,
+        );
     }
 
-    Object {obj, mtl}
+    Object { obj, mtl }
 }
 
-fn parse_section<T, F>(data: &[u8], abs_offset: usize, entry_size: usize, parse_fn: F) -> Result<Section<T>, String>
-where F: Fn(&[u8], usize) -> Result<T, String>, {
+fn parse_section<T, F>(
+    data: &[u8],
+    abs_offset: usize,
+    entry_size: usize,
+    parse_fn: F,
+) -> Result<Section<T>, String>
+where
+    F: Fn(&[u8], usize) -> Result<T, String>,
+{
     let header = SectionHeader::parse(data, abs_offset)?;
     let mut entries = Vec::with_capacity(header.entry_num as usize);
     for i in 0..header.entry_num as usize {
@@ -573,17 +731,21 @@ where F: Fn(&[u8], usize) -> Result<T, String>, {
 
 pub fn parse(data: &[u8]) -> Result<ParsedKmp, String> {
     let header = Header::parse(data)?;
-    let offsets: Vec<usize> = header.sections_offset.iter().map(|&o| header.header_len as usize + o as usize).collect();
+    let offsets: Vec<usize> = header
+        .sections_offset
+        .iter()
+        .map(|&o| header.header_len as usize + o as usize)
+        .collect();
 
-    let ktpt = parse_section(data, offsets[0],  0x1C, KTPT::parse)?;
-    let enpt = parse_section(data, offsets[1],  0x14, ENPT::parse)?;
-    let enph = parse_section(data, offsets[2],  0x10, ENPH::parse)?;
-    let itpt = parse_section(data, offsets[3],  0x14, ITPT::parse)?;
-    let itph = parse_section(data, offsets[4],  0x10, ITPH::parse)?;
-    let ckpt = parse_section(data, offsets[5],  0x14, CKPT::parse)?;
-    let ckph = parse_section(data, offsets[6],  0x10, CKPH::parse)?;
-    let gobj = parse_section(data, offsets[7],  0x3C, GOBJ::parse)?;
-    let area = parse_section(data, offsets[9],  0x30, AREA::parse)?;
+    let ktpt = parse_section(data, offsets[0], 0x1C, KTPT::parse)?;
+    let enpt = parse_section(data, offsets[1], 0x14, ENPT::parse)?;
+    let enph = parse_section(data, offsets[2], 0x10, ENPH::parse)?;
+    let itpt = parse_section(data, offsets[3], 0x14, ITPT::parse)?;
+    let itph = parse_section(data, offsets[4], 0x10, ITPH::parse)?;
+    let ckpt = parse_section(data, offsets[5], 0x14, CKPT::parse)?;
+    let ckph = parse_section(data, offsets[6], 0x10, CKPH::parse)?;
+    let gobj = parse_section(data, offsets[7], 0x3C, GOBJ::parse)?;
+    let area = parse_section(data, offsets[9], 0x30, AREA::parse)?;
     let came = parse_section(data, offsets[10], 0x48, CAME::parse)?;
     let jgpt = parse_section(data, offsets[11], 0x1C, JGPT::parse)?;
     let cnpt = parse_section(data, offsets[12], 0x1C, CNPT::parse)?;
@@ -599,9 +761,29 @@ pub fn parse(data: &[u8]) -> Result<ParsedKmp, String> {
         poti_offset += 0x04 + route.header.points_count as usize * 0x10;
         poti_entries.push(route);
     }
-    let poti = Section { header: poti_section_header, entries: poti_entries };
+    let poti = Section {
+        header: poti_section_header,
+        entries: poti_entries,
+    };
 
-    Ok(ParsedKmp { header, ktpt, enpt, enph, itpt, itph, ckpt, ckph, gobj, poti, area, came, jgpt, cnpt, mspt, stgi })
+    Ok(ParsedKmp {
+        header,
+        ktpt,
+        enpt,
+        enph,
+        itpt,
+        itph,
+        ckpt,
+        ckph,
+        gobj,
+        poti,
+        area,
+        came,
+        jgpt,
+        cnpt,
+        mspt,
+        stgi,
+    })
 }
 
 pub fn parse_from_path(path: &str) -> Result<ParsedKmp, String> {

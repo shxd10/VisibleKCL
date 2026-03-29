@@ -1,6 +1,6 @@
-use brres::{json::*, enums::*};
-use brres::*;
 use super::binary::*;
+use brres::*;
+use brres::{enums::*, json::*};
 
 struct ObjData {
     vertices: Vec<[f32; 3]>,
@@ -66,7 +66,11 @@ fn parse_mtl(mtl: &str) -> Result<MtlFile, String> {
         match parts.next() {
             Some("newmtl") => {
                 if let Some(name) = current_name.take() {
-                    materials.push(MtlData { name, color: current_color, alpha: current_alpha });
+                    materials.push(MtlData {
+                        name,
+                        color: current_color,
+                        alpha: current_alpha,
+                    });
                 }
                 current_name = Some(parts.next().unwrap_or("").to_string());
                 current_color = [1.0; 3];
@@ -86,7 +90,11 @@ fn parse_mtl(mtl: &str) -> Result<MtlFile, String> {
     }
 
     if let Some(name) = current_name {
-        materials.push(MtlData { name, color: current_color, alpha: current_alpha });
+        materials.push(MtlData {
+            name,
+            color: current_color,
+            alpha: current_alpha,
+        });
     }
 
     Ok(MtlFile { materials })
@@ -101,7 +109,11 @@ fn opaque_config() -> (JSONAlphaComparison, JSONZMode, JSONBlendMode, bool, bool
             compRight: Comparison::ALWAYS,
             refRight: 0,
         },
-        JSONZMode { compare: true, function: Comparison::LEQUAL, update: true },
+        JSONZMode {
+            compare: true,
+            function: Comparison::LEQUAL,
+            update: true,
+        },
         JSONBlendMode {
             type_: BlendModeType::none,
             source: BlendModeFactor::src_a,
@@ -122,7 +134,11 @@ fn translucent_config() -> (JSONAlphaComparison, JSONZMode, JSONBlendMode, bool,
             compRight: Comparison::ALWAYS,
             refRight: 0,
         },
-        JSONZMode { compare: true, function: Comparison::LEQUAL, update: false },
+        JSONZMode {
+            compare: true,
+            function: Comparison::LEQUAL,
+            update: false,
+        },
         JSONBlendMode {
             type_: BlendModeType::blend,
             source: BlendModeFactor::src_a,
@@ -149,8 +165,8 @@ fn build_vertex_data(faces: &[[usize; 3]]) -> Vec<u8> {
         for i in 0..3 {
             let local_idx = (face_idx * 3 + i) as u16;
             let mut indices = [0u16; 26];
-            indices[9]  = local_idx; // GX_VA_POS
-            indices[10]  = local_idx; // GX_VA_NRM
+            indices[9] = local_idx; // GX_VA_POS
+            indices[10] = local_idx; // GX_VA_NRM
             indices[11] = local_idx; // GX_VA_CLR0
             for idx in indices {
                 data.extend_from_slice(&idx.to_le_bytes());
@@ -162,11 +178,15 @@ fn build_vertex_data(faces: &[[usize; 3]]) -> Vec<u8> {
 
 // cross product of 2 edges, normalized
 fn calculate_normal(v0: [f32; 3], v1: [f32; 3], v2: [f32; 3]) -> [f32; 3] {
-    let e1 = [v1[0]-v0[0], v1[1]-v0[1], v1[2]-v0[2]];
-    let e2 = [v2[0]-v0[0], v2[1]-v0[1], v2[2]-v0[2]];
+    let e1 = [v1[0] - v0[0], v1[1] - v0[1], v1[2] - v0[2]];
+    let e2 = [v2[0] - v0[0], v2[1] - v0[1], v2[2] - v0[2]];
     let n = cross(e1, e2);
     let len = dot(n, n).sqrt();
-    if len == 0.0 { [0.0, 1.0, 0.0] } else { scale(n, 1.0 / len) }
+    if len == 0.0 {
+        [0.0, 1.0, 0.0]
+    } else {
+        scale(n, 1.0 / len)
+    }
 }
 
 pub fn from_obj_replace(brres: &mut Archive, obj: &str, mtl: &str) -> Result<(), String> {
@@ -193,14 +213,8 @@ pub fn from_obj_replace(brres: &mut Archive, obj: &str, mtl: &str) -> Result<(),
     for (i, (mat_name, faces)) in obj_file.groups.iter().enumerate() {
         // get mtl data from the file
         let mtl_data = mtl_file.materials.iter().find(|m| &m.name == mat_name);
-        let is_alpha = mtl_data.map_or(false, |m| m.alpha < 1.0);
-        let is_cp = {
-            if mat_name.contains("ckpt") {
-                true
-            } else {
-                false
-            }
-        };
+        let is_alpha = mtl_data.is_some_and(|m| m.alpha < 1.0);
+        let is_cp = mat_name.contains("ckpt");
 
         // POSITION
 
@@ -313,13 +327,33 @@ pub fn from_obj_replace(brres: &mut Archive, obj: &str, mtl: &str) -> Result<(),
             chanData: vec![
                 // color chan
                 JSONChannelData {
-                    matColor: Color { r: 255, g: 255, b: 255, a: 255 },
-                    ambColor: Color { r: 255, g: 255, b: 255, a: 255 },
+                    matColor: Color {
+                        r: 255,
+                        g: 255,
+                        b: 255,
+                        a: 255,
+                    },
+                    ambColor: Color {
+                        r: 255,
+                        g: 255,
+                        b: 255,
+                        a: 255,
+                    },
                 },
                 // alpha chan
                 JSONChannelData {
-                    matColor: Color { r: 0, g: 0, b: 0, a: 255 },
-                    ambColor: Color { r: 0, g: 0, b: 0, a: 255 },
+                    matColor: Color {
+                        r: 0,
+                        g: 0,
+                        b: 0,
+                        a: 255,
+                    },
+                    ambColor: Color {
+                        r: 0,
+                        g: 0,
+                        b: 0,
+                        a: 255,
+                    },
                 },
             ],
             colorChanControls: vec![
@@ -397,11 +431,13 @@ pub fn from_obj_replace(brres: &mut Archive, obj: &str, mtl: &str) -> Result<(),
     brres.models[0].normals = normal_buffer;
     brres.models[0].texcoords = vec![];
     // for each group, update the draw polygon call (needed for the bone to reference new data) with the new data
-    brres.models[0].bones[0].draw_calls = (0..obj_file.groups.len()).map(|i| JSONDrawCall {
-        material: i as u32,
-        poly: i as u32,
-        prio: 0,
-    }).collect();
+    brres.models[0].bones[0].draw_calls = (0..obj_file.groups.len())
+        .map(|i| JSONDrawCall {
+            material: i as u32,
+            poly: i as u32,
+            prio: 0,
+        })
+        .collect();
 
     Ok(())
 }
@@ -422,23 +458,17 @@ pub fn from_obj_overlay(brres: &mut Archive, obj: &str, mtl: &str) -> Result<(),
     let mut mesh_buffer: Vec<Mesh> = model.meshes.clone();
 
     let mut draw_calls = brres.models[0].bones[0].draw_calls.clone();
-    let first_mat_len  = material_buffer.len();
+    let first_mat_len = material_buffer.len();
     let first_mesh_len = mesh_buffer.len();
-    let first_pos_len  = position_buffer.len();
-    let first_nrm_len  = normal_buffer.len();
-    let first_clr_len  = color_buffer.len();
+    let first_pos_len = position_buffer.len();
+    let first_nrm_len = normal_buffer.len();
+    let first_clr_len = color_buffer.len();
 
     for (i, (mat_name, faces)) in obj_file.groups.iter().enumerate() {
         // get mtl data from the file
         let mtl_data = mtl_file.materials.iter().find(|m| &m.name == mat_name);
-        let is_alpha = mtl_data.map_or(false, |m| m.alpha < 1.0);
-        let is_cp = {
-            if mat_name.contains("ckpt") {
-                true
-            } else {
-                false
-            }
-        };
+        let is_alpha = mtl_data.is_some_and(|m| m.alpha < 1.0);
+        let is_cp = mat_name.contains("ckpt");
 
         // POSITIONS
         let pos_name = format!("{mat_name}_pos");
@@ -550,13 +580,33 @@ pub fn from_obj_overlay(brres: &mut Archive, obj: &str, mtl: &str) -> Result<(),
             chanData: vec![
                 // color chan
                 JSONChannelData {
-                    matColor: Color { r: 255, g: 255, b: 255, a: 255 },
-                    ambColor: Color { r: 255, g: 255, b: 255, a: 255 },
+                    matColor: Color {
+                        r: 255,
+                        g: 255,
+                        b: 255,
+                        a: 255,
+                    },
+                    ambColor: Color {
+                        r: 255,
+                        g: 255,
+                        b: 255,
+                        a: 255,
+                    },
                 },
                 // alpha chan
                 JSONChannelData {
-                    matColor: Color { r: 0, g: 0, b: 0, a: 255 },
-                    ambColor: Color { r: 0, g: 0, b: 0, a: 255 },
+                    matColor: Color {
+                        r: 0,
+                        g: 0,
+                        b: 0,
+                        a: 255,
+                    },
+                    ambColor: Color {
+                        r: 0,
+                        g: 0,
+                        b: 0,
+                        a: 255,
+                    },
                 },
             ],
             colorChanControls: vec![
@@ -627,11 +677,13 @@ pub fn from_obj_overlay(brres: &mut Archive, obj: &str, mtl: &str) -> Result<(),
         });
     }
 
-    let new_draw_calls: Vec<_> = (0..obj_file.groups.len()).map(|i| JSONDrawCall {
-        material: (first_mat_len + i) as u32,
-        poly: (first_mesh_len + i) as u32,
-        prio: 0,
-    }).collect();
+    let new_draw_calls: Vec<_> = (0..obj_file.groups.len())
+        .map(|i| JSONDrawCall {
+            material: (first_mat_len + i) as u32,
+            poly: (first_mesh_len + i) as u32,
+            prio: 0,
+        })
+        .collect();
 
     draw_calls.extend(new_draw_calls);
     brres.models[0].bones[0].draw_calls = draw_calls;
@@ -640,7 +692,6 @@ pub fn from_obj_overlay(brres: &mut Archive, obj: &str, mtl: &str) -> Result<(),
     brres.models[0].positions = position_buffer;
     brres.models[0].colors = color_buffer;
     brres.models[0].normals = normal_buffer;
-
 
     Ok(())
 }

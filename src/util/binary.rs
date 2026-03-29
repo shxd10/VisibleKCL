@@ -111,16 +111,20 @@ pub fn read_vec_f32(data: &[u8], offset: usize, count: usize) -> Result<Vec<f32>
 
 // vector algebra
 pub fn cross(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
-    [a[1]*b[2] - a[2]*b[1], a[2]*b[0] - a[0]*b[2], a[0]*b[1] - a[1]*b[0]]
+    [
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    ]
 }
 pub fn dot(a: [f32; 3], b: [f32; 3]) -> f32 {
-    a[0]*b[0] + a[1]*b[1] + a[2]*b[2]
+    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
 }
 pub fn add(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
-    [a[0]+b[0], a[1]+b[1], a[2]+b[2]]
+    [a[0] + b[0], a[1] + b[1], a[2] + b[2]]
 }
 pub fn scale(a: [f32; 3], s: f32) -> [f32; 3] {
-    [a[0]*s, a[1]*s, a[2]*s]
+    [a[0] * s, a[1] * s, a[2] * s]
 }
 
 pub fn path_to_data(path: &str, filetype: &str) -> Result<Vec<u8>, String> {
@@ -128,6 +132,5 @@ pub fn path_to_data(path: &str, filetype: &str) -> Result<Vec<u8>, String> {
         return Err(format!("The file is not a .{} file.", filetype));
     }
 
-    Ok(fs::read(path)
-        .map_err(|e| format!("Failed to read file: {}", e))?)
+    Ok(fs::read(path).map_err(|e| format!("Failed to read file: {}", e))?)
 }
