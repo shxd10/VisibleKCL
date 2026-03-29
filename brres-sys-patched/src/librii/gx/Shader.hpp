@@ -238,11 +238,17 @@ enum class ColorSelChanApi {
   null = 0xFF
 };
 
+} // closes librii::gx
+
+namespace magic_enum::customize {
 template <>
-struct magic_enum::customize::enum_range<ColorSelChanApi> {
+struct enum_range<brres_librii::gx::ColorSelChanApi> {
     static constexpr int min = 0;
     static constexpr int max = 255;
 };
+} // closes magic_enum::customize
+
+namespace librii::gx {
 
 struct TevStage {
   // RAS1_TREF
