@@ -3,16 +3,6 @@
 version = 4
 
 [[package]]
-name = "VisibleKCL"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "brres",
- "image",
- "szs",
-]
-
-[[package]]
 name = "adler2"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1378,11 +1368,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
+name = "vkcl"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "brres",
+ "image",
+ "szs",
+]
+
+[[package]]
 name = "vkcl-cli"
 version = "0.1.0"
 dependencies = [
- "VisibleKCL",
  "clap 4.5.60",
+ "vkcl",
 ]
 
 [[package]]

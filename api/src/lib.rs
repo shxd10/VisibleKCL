@@ -10,6 +10,7 @@ pub use util::{
 };
 
 use std::fs;
+use std::path::Path;
 
 pub struct OverlayOption {
     pub ckpt: bool,
@@ -20,7 +21,9 @@ pub struct OverlayOption {
 
 impl OverlayOption {
     pub fn any_true(&self) -> bool {
-        [self.ckpt, self.ckpt_side].iter().any(|&option| option)
+        [self.ckpt, self.ckpt_side, self.inv_walls, self.gobj]
+            .iter()
+            .any(|&option| option)
     }
 }
 
@@ -190,9 +193,9 @@ pub fn replace_gobj(course: &mut CourseFiles) -> Result<(), String> {
         .map(|n| n.name.clone())
         .collect();
 
-    // replace with custom brres from gobj directory (relative to CLI working directory)
+    // replace with custom brres from gobj directory
     for name in brres_names {
-        let gobj_path = format!("gobj/{}", name);
+        let gobj_path = format!("api/src/gobj/{}", name);
         let Ok(buf) = fs::read(&gobj_path) else {
             eprintln!("Warning: Could not find gobj file: {}", gobj_path);
             continue;
@@ -200,7 +203,7 @@ pub fn replace_gobj(course: &mut CourseFiles) -> Result<(), String> {
         course.arc.replace_file(&name, buf)?;
     }
 
-    // need the enum to know which objects have kcl and what they're called
+    // need the bigass enum to know which objects have kcl and what they're called
     let kcl_names: Vec<&'static str> = course
         .kmp
         .gobj
@@ -211,7 +214,6 @@ pub fn replace_gobj(course: &mut CourseFiles) -> Result<(), String> {
         .into_iter()
         .collect();
 
-    // yes im gonna be honest i vibe coded this part
     for name in kcl_names {
         let kcl_filename = format!("{}.kcl", name);
         let brres_filename = format!("{}.brres", name);
@@ -245,5 +247,98 @@ pub fn replace_gobj(course: &mut CourseFiles) -> Result<(), String> {
         course.arc.replace_file(&brres_filename, buf)?;
     }
 
+    Ok(())
+}
+
+/// Replace a .szs brres data with Collision data, with additional settings.
+pub fn replace(
+    input_path: &str,
+    output_path: &str,
+    highlight: &HighlightOption,
+    special: &SpecialPlanesOption,
+    overlay: &OverlayOption,
+    write_obj: bool,
+) -> Result<(), String> {
+    let filename = Path::new(input_path)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .ok_or("Invalid path")?;
+    let mut course = szs::parse_course_files(input_path)?;
+
+    let object = kcl::to_obj(
+        &course.kcl,
+        filename,
+        highlight,
+        special,
+        &course.kmp,
+        overlay,
+    );
+
+    if write_obj {
+        write_obj_file(&object.obj, &object.mtl, filename);
+    }
+
+    brres::from_obj_replace(&mut course.brres, &object.obj, &object.mtl)?;
+    let buf = course.brres.write_memory().map_err(|e| e.to_string())?;
+    course.arc.replace_file("course_model.brres", buf)?;
+
+    if overlay.gobj {
+        replace_gobj(&mut course)?;
+    }
+
+    write_szs(&course, &output_path)?;
+    Ok(())
+}
+
+/// Keep original textures, only overlay what's set.
+pub fn overlay(
+    input_path: &str,
+    output_path: &str,
+    overlay: &OverlayOption,
+    write_obj: bool,
+) -> Result<(), String> {
+    let filename = Path::new(input_path)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .ok_or("Invalid path")?;
+    let mut course = szs::parse_course_files(&input_path)?;
+
+    let mut object = Object {
+        obj: String::new(),
+        mtl: String::new(),
+    };
+
+    // if the user enables inv walls on overlay, delete every kcl flag other than inv wall (keep())
+    // .replace() is for replacing the object with the one returned by to_obj
+    if overlay.inv_walls {
+        course.kcl = course.kcl.keep(BaseType::InvisibleWall);
+        object.replace(kcl::to_obj(
+            &course.kcl,
+            filename,
+            &HighlightOption::default(),
+            &SpecialPlanesOption::default(),
+            &course.kmp,
+            &overlay,
+        ));
+    }
+
+    if overlay.ckpt || overlay.ckpt_side {
+        object.replace(kmp::to_obj(&course.kmp, &course.kcl, filename, &overlay));
+    }
+
+    if write_obj {
+        write_obj_file(&object.obj, &object.mtl, filename);
+    }
+
+    brres::from_obj_overlay(&mut course.brres, &object.obj, &object.mtl)?;
+
+    let buf = course.brres.write_memory().map_err(|e| e.to_string())?;
+    course.arc.replace_file("course_model.brres", buf)?;
+
+    if overlay.gobj {
+        replace_gobj(&mut course)?;
+    }
+
+    write_szs(&course, &output_path)?;
     Ok(())
 }

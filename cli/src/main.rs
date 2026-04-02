@@ -4,9 +4,9 @@ use std::fs;
 use std::path::Path;
 use std::time::Instant;
 
-use api::CourseFiles;
-use api::enums::{self, Gobj};
-use api::{
+use vkcl::CourseFiles;
+use vkcl::enums::{self, Gobj};
+use vkcl::{
     HighlightOption, KclDrawOptions, KmpDrawOptions, Object, OverlayOption, SpecialPlanesOption,
     brres, draw,
     kcl::{self, BaseType},
@@ -26,6 +26,11 @@ enum Command {
     Extract { path: String },
     Replace {
         path: String,
+        #[arg(long, short = 'd')]
+        dest: Option<String>,
+        #[arg(long, short = 'o', default_value_t = false)]
+        overwrite: bool,
+
         #[arg(long, default_value_t = false)]
         write_obj: bool,
 
@@ -56,6 +61,11 @@ enum Command {
     },
     Overlay {
         path: String,
+        #[arg(long, short = 'd')]
+        dest: Option<String>,
+        #[arg(long, short = 'o', default_value_t = false)]
+        overwrite: bool,
+
         #[arg(long, default_value_t = false)]
         write_obj: bool,
 
@@ -103,6 +113,8 @@ enum Command {
         cnpt: bool,
         #[arg(long, default_value_t = false)]
         mspt: bool,
+        #[arg(long, default_value_t = false)]
+        stgi: bool,
     },
 }
 
@@ -115,6 +127,8 @@ fn main() -> Result<(), String> {
         }
         Command::Replace {
             path,
+            dest,
+            overwrite,
             write_obj,
             ckpt,
             ckpt_side,
@@ -151,37 +165,30 @@ fn main() -> Result<(), String> {
                 item_state_modifier,
             };
 
-            let filename = Path::new(&path).file_stem().unwrap().to_str().unwrap();
-            let mut course = szs::parse_course_files(&path)?;
-            let object = kcl::to_obj(
-                &course.kcl,
-                filename,
+            let output = dest.unwrap_or_else(|| {
+                let stem = Path::new(&path).file_stem().unwrap().to_str().unwrap();
+                if overwrite {
+                    path.clone()
+                } else {
+                    format!("{stem}_kcl.szs")
+                }
+            });
+
+            vkcl::replace(
+                &path,
+                &output,
                 &highlight,
                 &special,
-                &course.kmp,
                 &overlay_option,
-            );
+                write_obj,
+            )?;
 
-            let obj = object.obj;
-            let mtl = object.mtl;
-
-            if write_obj {
-                write_obj_file(&obj, &mtl, filename);
-            }
-
-            brres::from_obj_replace(&mut course.brres, &obj, &mtl)?;
-
-            let buf = course.brres.write_memory().map_err(|e| e.to_string())?;
-            course.arc.replace_file("course_model.brres", buf)?;
-            if overlay_option.gobj {
-                replace_gobj(&mut course)?;
-            }
-
-            write_szs(&course, filename)?;
             println!("Took: {:?}", start.elapsed());
         }
         Command::Overlay {
             path,
+            dest,
+            overwrite,
             write_obj,
             ckpt,
             ckpt_side,
@@ -190,60 +197,23 @@ fn main() -> Result<(), String> {
         } => {
             let start = Instant::now();
 
-            let overlay_option = OverlayOption {
+            let overlay = OverlayOption {
                 ckpt,
                 ckpt_side,
                 inv_walls,
                 gobj,
             };
 
-            let filename = Path::new(&path).file_stem().unwrap().to_str().unwrap();
-            let mut course = szs::parse_course_files(&path)?;
+            let output = dest.unwrap_or_else(|| {
+                let stem = Path::new(&path).file_stem().unwrap().to_str().unwrap();
+                if overwrite {
+                    path.clone()
+                } else {
+                    format!("{stem}_overlay.szs")
+                }
+            });
 
-            let mut object = Object {
-                obj: String::new(),
-                mtl: String::new(),
-            };
-
-            // if the user enables inv walls on overlay, delete every kcl flag other than inv wall (keep())
-            // .replace() is for replacing the object with the one returned by to_obj
-            if overlay_option.inv_walls {
-                course.kcl = course.kcl.keep(BaseType::InvisibleWall);
-                object.replace(kcl::to_obj(
-                    &course.kcl,
-                    filename,
-                    &HighlightOption::default(),
-                    &SpecialPlanesOption::default(),
-                    &course.kmp,
-                    &overlay_option,
-                ));
-            }
-
-            if overlay_option.ckpt || overlay_option.ckpt_side {
-                object.replace(kmp::to_obj(
-                    &course.kmp,
-                    &course.kcl,
-                    filename,
-                    &overlay_option,
-                ));
-            }
-
-            let obj = object.obj;
-            let mtl = object.mtl;
-
-            if write_obj {
-                write_obj_file(&obj, &mtl, filename);
-            }
-
-            brres::from_obj_overlay(&mut course.brres, &obj, &mtl)?;
-
-            let buf = course.brres.write_memory().map_err(|e| e.to_string())?;
-            course.arc.replace_file("course_model.brres", buf)?;
-
-            if overlay_option.gobj {
-                replace_gobj(&mut course)?;
-            }
-            write_szs(&course, filename)?;
+            vkcl::overlay(&path, &output, &overlay, write_obj);
             println!("Took: {:?}", start.elapsed());
         }
         Command::Draw {
@@ -264,6 +234,7 @@ fn main() -> Result<(), String> {
             jgpt_lines,
             cnpt,
             mspt,
+            stgi,
         } => {
             let img = draw::to_image(
                 &path,
@@ -283,7 +254,7 @@ fn main() -> Result<(), String> {
                     jgpt_lines,
                     cnpt,
                     mspt,
-                    stgi: false,
+                    stgi,
                 },
             );
             img.save("output.png").unwrap();
