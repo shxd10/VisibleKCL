@@ -4,7 +4,6 @@ currently a CLI tool, thought for TAS comp, that quickly transforms a normal `.s
 and yes i know this is something better done in-game (with something such a gecko code, or ideally, a pycore script) but i do not have the knowledge to do so<br/>
 
 todo:
-- divide the logic in a standalone library crate, then build a cli (and maybe GUI if i really want to) on top of it
 - rust version of `szs` and `brres` crates (`brres` is MUCH more complicated, probably will never try it)
   
 ### Credits

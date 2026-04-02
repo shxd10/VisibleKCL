@@ -187,7 +187,6 @@ pub enum EncodeAlgo {
     /// Speed: A+
     /// Compression Rate: B+
     MK8_ReferenceCVersion = 7,
-
     // MK8_Rust = 107,
 }
 

@@ -1,20 +1,14 @@
-[package]
-name = "VisibleKCL"
-version = "0.1.0"
-edition = "2024"
+[workspace]
+resolver = "3"
+members = ["api", "cli"]
 
-[dependencies]
+[workspace.dependencies]
 anyhow = "1.0.102"
 brres = "0.1.7"
-clap = { version = "4.5.60", features = ["derive"] }
 image = "0.25.9"
 szs = "0.3.7"
 
 [patch.crates-io]
-szs = { path = "szs-patched" }
-brres-sys = { path = "brres-sys-patched" }
-brres = { path = "brres-patched" }
-
-[[bin]]
-name = "vkcl"
-path = "src/main.rs"
+szs = { path = "api/szs-patched" }
+brres-sys = { path = "api/brres-sys-patched" }
+brres = { path = "api/brres-patched" }

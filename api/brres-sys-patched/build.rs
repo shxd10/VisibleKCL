@@ -98,7 +98,7 @@ fn main() {
             build.flag("-Wno-sign-compare");
             build.flag("-Wno-unused-variable");
             build.flag("-Wno-deprecated-copy");
-            
+
             build.flag("-Wno-deprecated-literal-operator");
             build.flag("-Wno-return-type");
             build.flag("-Wno-unused-but-set-variable");

@@ -1,4 +1,4 @@
-use serde::{Serialize, Deserialize, Serializer};
+use serde::{Deserialize, Serialize, Serializer};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum TevKColorSel {
