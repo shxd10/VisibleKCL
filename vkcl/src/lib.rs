@@ -171,9 +171,9 @@ pub fn write_obj_file(obj: &str, mtl: &str, name: &str) {
     fs::write(format!("{name}.mtl"), &mtl).unwrap();
 }
 
-pub fn write_szs(course: &CourseFiles, filename: &str) -> Result<(), String> {
+pub fn write_szs(course: &CourseFiles, path: &str) -> Result<(), String> {
     let szs_buf = szs::write_arc_to_szs(&course.arc)?;
-    fs::write(format!("{}.szs", filename), szs_buf).map_err(|e| e.to_string())?;
+    fs::write(path, szs_buf).map_err(|e| e.to_string())?;
     Ok(())
 }
 

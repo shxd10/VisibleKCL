@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["api", "cli"]
+members = ["vkcl", "vkcl-cli", "vkcl-py"]
 
 [workspace.dependencies]
 anyhow = "1.0.102"
@@ -9,6 +9,6 @@ image = "0.25.9"
 szs = "0.3.7"
 
 [patch.crates-io]
-szs = { path = "api/szs-patched" }
-brres-sys = { path = "api/brres-sys-patched" }
-brres = { path = "api/brres-patched" }
+szs = { path = "vkcl/szs-patched" }
+brres-sys = { path = "vkcl/brres-sys-patched" }
+brres = { path = "vkcl/brres-patched" }

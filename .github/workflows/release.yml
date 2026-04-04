@@ -3,9 +3,10 @@ on:
   push:
     tags:
       - 'v*'
+
 jobs:
-  build:
-    name: Build release (${{ matrix.target }})
+  build-cli:
+    name: Build CLI (${{ matrix.target }})
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -18,6 +19,9 @@ jobs:
             artifact: vkcl-cli.exe
           - os: macos-latest
             target: x86_64-apple-darwin
+            artifact: vkcl-cli
+          - os: macos-14
+            target: aarch64-apple-darwin
             artifact: vkcl-cli
     steps:
       - uses: actions/checkout@v4
@@ -32,19 +36,59 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install cmake
       - name: Build
+        working-directory: vkcl-cli
         run: cargo build --release --target ${{ matrix.target }}
       - name: Stage binary
         shell: bash
         run: |
           mkdir dist
-          cp target/${{ matrix.target }}/release/${{ matrix.artifact }} dist/vkcl-${{ matrix.target }}${{ matrix.os == 'windows-latest' && '.exe' || '' }}
+          cp vkcl-cli/target/${{ matrix.target }}/release/${{ matrix.artifact }} dist/vkcl-${{ matrix.target }}${{ matrix.os == 'windows-latest' && '.exe' || '' }}
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.target }}
+          name: cli-${{ matrix.target }}
           path: dist/
+
+  build-py:
+    name: Build Python wheels (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+          - os: macos-latest
+            target: x86_64-apple-darwin
+          - os: macos-14
+            target: aarch64-apple-darwin
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+      - name: Install deps (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get install -y build-essential cmake
+      - name: Install deps (macOS)
+        if: runner.os == 'macOS'
+        run: brew install cmake
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          args: --release --out dist
+          working-directory: vkcl-py
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.target }}
+          path: vkcl-py/dist/*.whl
+
   release:
-    needs: build
+    needs: [build-cli, build-py]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -52,8 +96,15 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: artifacts/
+
+      - name: Create zips
+        run: |
+          mkdir dist
+          zip -j dist/vkcl-cli.zip artifacts/cli-*/*
+          zip -j dist/vkcl-py.zip artifacts/wheels-*/*
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: artifacts/**/*
+          files: dist/*.zip
           generate_release_notes: true
