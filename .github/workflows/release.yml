@@ -80,6 +80,22 @@ jobs:
         with:
           name: wheels-${{ matrix.target }}
           path: vkcl-py/dist/*.whl
+  publish-py:
+    needs: build-py
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: wheels-*
+          path: wheels/
+          merge-multiple: true
+      - name: Publish to PyPI
+        run: |
+          pip install twine
+          twine upload wheels/*.whl
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
 
   release:
     needs: [build-cli, build-py]
