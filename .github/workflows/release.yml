@@ -17,12 +17,6 @@ jobs:
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             artifact: vkcl-cli.exe
-          - os: macos-latest
-            target: x86_64-apple-darwin
-            artifact: vkcl-cli
-          - os: macos-14
-            target: aarch64-apple-darwin
-            artifact: vkcl-cli
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -36,13 +30,14 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install cmake
       - name: Build
-        working-directory: vkcl-cli
-        run: cargo build --release --target ${{ matrix.target }}
+        run: cargo build --release -p vkcl-cli
+
       - name: Stage binary
         shell: bash
         run: |
           mkdir dist
-          cp vkcl-cli/target/${{ matrix.target }}/release/${{ matrix.artifact }} dist/vkcl-${{ matrix.target }}${{ matrix.os == 'windows-latest' && '.exe' || '' }}
+          cp target/release/${{ matrix.artifact }} dist/vkcl-${{ matrix.target }}${{ matrix.os == 'windows-latest' && '.exe' || '' }}
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -59,10 +54,6 @@ jobs:
             target: x86_64-unknown-linux-gnu
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-          - os: macos-latest
-            target: x86_64-apple-darwin
-          - os: macos-14
-            target: aarch64-apple-darwin
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -75,11 +66,14 @@ jobs:
       - name: Install deps (macOS)
         if: runner.os == 'macOS'
         run: brew install cmake
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: --release --out dist
+          args: --release --out dist --interpreter python3.12
           working-directory: vkcl-py
       - name: Upload wheels
         uses: actions/upload-artifact@v4

@@ -2,8 +2,8 @@ use pyo3::prelude::*;
 
 #[pymodule]
 mod vkcl_py {
-    use pyo3::prelude::*;
     use pyo3::exceptions::PyRuntimeError;
+    use pyo3::prelude::*;
 
     // rewriting the structs
 
@@ -21,7 +21,10 @@ mod vkcl_py {
         #[new]
         #[pyo3(signature = (soft_wall=false, horizontal_wall=false))]
         fn new(soft_wall: bool, horizontal_wall: bool) -> Self {
-            Self { soft_wall, horizontal_wall }
+            Self {
+                soft_wall,
+                horizontal_wall,
+            }
         }
     }
 
@@ -61,7 +64,14 @@ mod vkcl_py {
             effect_trigger: bool,
             item_state_modifier: bool,
         ) -> Self {
-            Self { item_road, item_wall, force_recalc, sound_trigger, effect_trigger, item_state_modifier }
+            Self {
+                item_road,
+                item_wall,
+                force_recalc,
+                sound_trigger,
+                effect_trigger,
+                item_state_modifier,
+            }
         }
     }
 
@@ -83,7 +93,12 @@ mod vkcl_py {
         #[new]
         #[pyo3(signature = (ckpt=false, ckpt_side=false, inv_walls=false, gobj=false))]
         fn new(ckpt: bool, ckpt_side: bool, inv_walls: bool, gobj: bool) -> Self {
-            Self { ckpt, ckpt_side, inv_walls, gobj }
+            Self {
+                ckpt,
+                ckpt_side,
+                inv_walls,
+                gobj,
+            }
         }
     }
 
@@ -179,7 +194,23 @@ mod vkcl_py {
             mspt: bool,
             stgi: bool,
         ) -> Self {
-            Self { thickness, ktpt, enpt, itpt, ckpt, ckpt_side_lines, gobj, poti, area, came, jgpt, jgpt_lines, cnpt, mspt, stgi }
+            Self {
+                thickness,
+                ktpt,
+                enpt,
+                itpt,
+                ckpt,
+                ckpt_side_lines,
+                gobj,
+                poti,
+                area,
+                came,
+                jgpt,
+                jgpt_lines,
+                cnpt,
+                mspt,
+                stgi,
+            }
         }
     }
 
@@ -198,9 +229,24 @@ mod vkcl_py {
         vkcl::replace(
             input_path,
             output_path,
-            &vkcl::HighlightOption { soft_wall: highlight.soft_wall, horizontal_wall: highlight.horizontal_wall },
-            &vkcl::SpecialPlanesOption { item_road: special.item_road, item_wall: special.item_wall, force_recalc: special.force_recalc, sound_trigger: special.sound_trigger, effect_trigger: special.effect_trigger, item_state_modifier: special.item_state_modifier },
-            &vkcl::OverlayOption { ckpt: overlay.ckpt, ckpt_side: overlay.ckpt_side, inv_walls: overlay.inv_walls, gobj: overlay.gobj },
+            &vkcl::HighlightOption {
+                soft_wall: highlight.soft_wall,
+                horizontal_wall: highlight.horizontal_wall,
+            },
+            &vkcl::SpecialPlanesOption {
+                item_road: special.item_road,
+                item_wall: special.item_wall,
+                force_recalc: special.force_recalc,
+                sound_trigger: special.sound_trigger,
+                effect_trigger: special.effect_trigger,
+                item_state_modifier: special.item_state_modifier,
+            },
+            &vkcl::OverlayOption {
+                ckpt: overlay.ckpt,
+                ckpt_side: overlay.ckpt_side,
+                inv_walls: overlay.inv_walls,
+                gobj: overlay.gobj,
+            },
             write_obj,
         )
         .map_err(|e| PyRuntimeError::new_err(e))
@@ -217,7 +263,12 @@ mod vkcl_py {
         vkcl::overlay(
             input_path,
             output_path,
-            &vkcl::OverlayOption { ckpt: overlay.ckpt, ckpt_side: overlay.ckpt_side, inv_walls: overlay.inv_walls, gobj: overlay.gobj },
+            &vkcl::OverlayOption {
+                ckpt: overlay.ckpt,
+                ckpt_side: overlay.ckpt_side,
+                inv_walls: overlay.inv_walls,
+                gobj: overlay.gobj,
+            },
             write_obj,
         )
         .map_err(|e| PyRuntimeError::new_err(e))
@@ -238,9 +289,29 @@ mod vkcl_py {
 
         let img = vkcl::draw::to_image(
             path,
-            &vkcl::KclDrawOptions { wireframe: kcl.wireframe, shading: kcl.shading },
-            &vkcl::KmpDrawOptions { thickness: kmp.thickness, ktpt: kmp.ktpt, enpt: kmp.enpt, itpt: kmp.itpt, ckpt: kmp.ckpt, ckpt_side_lines: kmp.ckpt_side_lines, gobj: kmp.gobj, poti: kmp.poti, area: kmp.area, came: kmp.came, jgpt: kmp.jgpt, jgpt_lines: kmp.jgpt_lines, cnpt: kmp.cnpt, mspt: kmp.mspt, stgi: kmp.stgi },
+            &vkcl::KclDrawOptions {
+                wireframe: kcl.wireframe,
+                shading: kcl.shading,
+            },
+            &vkcl::KmpDrawOptions {
+                thickness: kmp.thickness,
+                ktpt: kmp.ktpt,
+                enpt: kmp.enpt,
+                itpt: kmp.itpt,
+                ckpt: kmp.ckpt,
+                ckpt_side_lines: kmp.ckpt_side_lines,
+                gobj: kmp.gobj,
+                poti: kmp.poti,
+                area: kmp.area,
+                came: kmp.came,
+                jgpt: kmp.jgpt,
+                jgpt_lines: kmp.jgpt_lines,
+                cnpt: kmp.cnpt,
+                mspt: kmp.mspt,
+                stgi: kmp.stgi,
+            },
         );
-        img.save(output_path).map_err(|e| PyRuntimeError::new_err(e.to_string()))
+        img.save(output_path)
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
 }
