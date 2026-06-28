@@ -1,3 +1,5 @@
+NOTE: CURRENT RELEASE PROBABLY DOESN'T WORK.
+
 Workspace which includes:<br/>
 `vkcl` core logic and main API<br/>
 `vkcl-cli` a simple CLI wrapper<br/>
