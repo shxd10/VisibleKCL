@@ -62,6 +62,63 @@ impl ParsedArc {
 
         Ok(())
     }
+    pub fn delete_dir(&mut self, name: &str) -> Result<(), String> {
+        let dir_idx = self.nodes
+            .iter()
+            .position(|n| n.name == name && n.node_type == 1)
+            .ok_or(format!("Dir not found: {}", name))?;
+
+        let subtree_end = self.nodes[dir_idx].data_size as usize;
+        let count = subtree_end - dir_idx; // 4 in your case
+
+        // Remove file data descending, fixing offsets after each splice
+        let mut data_ranges: Vec<(usize, usize)> = self.nodes[dir_idx..subtree_end]
+            .iter()
+            .filter(|n| n.node_type == 0)
+            .map(|n| (n.data_offset as usize, n.data_size as usize))
+            .collect();
+        data_ranges.sort_by_key(|&(offset, _)| std::cmp::Reverse(offset));
+
+        for (offset, size) in data_ranges {
+            self.data.splice(offset..offset + size, []);
+            for n in self.nodes.iter_mut() {
+                if n.node_type == 0 && n.data_offset as usize > offset {
+                    n.data_offset -= size as u32;
+                }
+            }
+        }
+
+        // Drain the nodes
+        self.nodes.drain(dir_idx..subtree_end);
+
+        // at the end of delete_dir, after draining nodes:
+        let new_data_section_start = {
+            let node_count = self.nodes.len();
+            let nodes_size = node_count * 0x0C;
+            let first_node_offset = 0x20usize;
+            // recompute string pool size
+            let string_pool_size: usize = self.nodes.iter()
+                .map(|n| n.name.len() + 1)
+                .sum();
+            let string_pool_offset = first_node_offset + nodes_size;
+            (string_pool_offset + string_pool_size + 0x1F) & !0x1F
+        };
+
+        let old_data_section_start = self.header.data_offset as usize;
+        let delta = old_data_section_start as i64 - new_data_section_start as i64;
+
+        // shift all file node offsets by the delta
+        for n in self.nodes.iter_mut() {
+            if n.node_type == 0 {
+                n.data_offset = (n.data_offset as i64 - delta) as u32;
+            }
+        }
+
+        // update header so write_arc slices correctly
+        self.header.data_offset = new_data_section_start as i32;
+
+        Ok(())
+    }
 }
 
 impl Header {

@@ -1,6 +1,7 @@
 /target
 /*.png
-/*.szs
 /*.obj
 /*.mtl
 /*.exe
+/**/*.brres
+/**/*.szs

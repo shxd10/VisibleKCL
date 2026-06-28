@@ -281,7 +281,7 @@ pub fn replace(
     brres::from_obj_replace(&mut course.brres, &object.obj, &object.mtl)?;
     let buf = course.brres.write_memory().map_err(|e| e.to_string())?;
     course.arc.replace_file("course_model.brres", buf)?;
-
+    course.arc.delete_dir("posteffect")?;
     if overlay.gobj {
         replace_gobj(&mut course)?;
     }

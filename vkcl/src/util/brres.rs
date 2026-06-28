@@ -430,6 +430,12 @@ pub fn from_obj_replace(brres: &mut Archive, obj: &str, mtl: &str) -> Result<(),
     brres.models[0].colors = color_buffer;
     brres.models[0].normals = normal_buffer;
     brres.models[0].texcoords = vec![];
+
+    // clear every bone calls
+    for bone in brres.models[0].bones.iter_mut() {
+        bone.draw_calls = vec![];
+    }
+
     // for each group, update the draw polygon call (needed for the bone to reference new data) with the new data
     brres.models[0].bones[0].draw_calls = (0..obj_file.groups.len())
         .map(|i| JSONDrawCall {
